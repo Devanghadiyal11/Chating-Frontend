@@ -45,32 +45,79 @@ export function playLoveNudgeChime(soundEnabled = true) {
   playTone(880, "triangle", 0.6, 0.3, soundEnabled);    // A5
 }
 
-export function burstHearts(count = 24) {
-  if (typeof document === "undefined") return;
-  const icons = ["💖", "💕", "❤️", "🥰", "🌸", "✨", "💋", "💌", "🌷", "💗", "💘", "🌹"];
+export function burstHearts(count = 28) {
+  if (typeof document === "undefined" || !document.body) return;
+
+  // Haptic feedback on mobile if supported
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    try {
+      navigator.vibrate([35, 50, 35]);
+    } catch {}
+  }
+
+  // Ensure dedicated full-screen overlay container exists with top z-index
+  let container = document.getElementById("floating-hearts-overlay");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "floating-hearts-overlay";
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "0";
+    container.style.width = "100vw";
+    container.style.height = "100dvh";
+    container.style.pointerEvents = "none";
+    container.style.zIndex = "999999";
+    container.style.overflow = "hidden";
+    document.body.appendChild(container);
+  }
+
+  const icons = ["💖", "💕", "❤️", "🥰", "🌸", "✨", "💋", "💌", "🌷", "💗", "💘", "🌹", "🦋", "💍", "💓"];
 
   for (let i = 0; i < count; i++) {
-    const delayMs = Math.random() * 750;
+    const delayMs = Math.random() * 650;
     setTimeout(() => {
-      const h = document.createElement("div");
-      h.className = "floating-heart";
-      h.textContent = icons[Math.floor(Math.random() * icons.length)];
+      if (!container) return;
 
-      const startX = Math.random() * 84 + 8;
-      h.style.left = `${startX}vw`;
+      const el = document.createElement("span");
+      el.textContent = icons[Math.floor(Math.random() * icons.length)];
+      el.style.position = "absolute";
+      el.style.bottom = "-40px";
+      el.style.left = `${Math.random() * 86 + 7}%`;
+      el.style.fontSize = `${(Math.random() * 1.1 + 1.5).toFixed(2)}rem`;
+      el.style.userSelect = "none";
+      el.style.pointerEvents = "none";
+      el.style.willChange = "transform, opacity";
+      el.style.filter = "drop-shadow(0 0 10px rgba(225, 29, 72, 0.75))";
+      el.style.zIndex = "999999";
 
-      const duration = (Math.random() * 1.2 + 2.6).toFixed(2);
-      const sway = (Math.random() * 80 - 40).toFixed(0);
-      const rot = (Math.random() * 50 - 25).toFixed(0);
-      const size = (Math.random() * 1.1 + 1.4).toFixed(2);
+      container.appendChild(el);
 
-      h.style.setProperty("--anim-dur", `${duration}s`);
-      h.style.setProperty("--sway-x", `${sway}px`);
-      h.style.setProperty("--rot", `${rot}deg`);
-      h.style.fontSize = `${size}rem`;
+      const durationMs = Math.random() * 800 + 2400; // 2.4s to 3.2s
+      const swayPx = Math.random() * 90 - 45;       // -45px to +45px
+      const rotDeg = Math.random() * 50 - 25;       // -25deg to +25deg
+      const peakScale = (Math.random() * 0.4 + 1.2).toFixed(2);
 
-      document.body.appendChild(h);
-      setTimeout(() => h.remove(), parseFloat(duration) * 1000 + 100);
+      // Web Animations API (Ultra-smooth 60fps/120fps hardware acceleration on iOS & Android)
+      if (typeof el.animate === "function") {
+        const anim = el.animate(
+          [
+            { transform: "translate3d(0, 0, 0) scale(0.6) rotate(0deg)", opacity: 0 },
+            { transform: `translate3d(${swayPx * 0.3}px, -100px, 0) scale(${peakScale}) rotate(${rotDeg * 0.4}deg)`, opacity: 1, offset: 0.15 },
+            { transform: `translate3d(${swayPx * 0.7}px, -50vh, 0) scale(${peakScale}) rotate(${rotDeg * 0.8}deg)`, opacity: 0.95, offset: 0.7 },
+            { transform: `translate3d(${swayPx}px, -112vh, 0) scale(1.05) rotate(${rotDeg}deg)`, opacity: 0 }
+          ],
+          {
+            duration: durationMs,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            fill: "forwards"
+          }
+        );
+        anim.onfinish = () => el.remove();
+      } else {
+        // Fallback for older browsers
+        el.className = "floating-heart";
+        setTimeout(() => el.remove(), durationMs + 200);
+      }
     }, delayMs);
   }
 }
