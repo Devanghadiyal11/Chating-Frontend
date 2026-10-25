@@ -11,7 +11,7 @@ interface HeaderProps {
   pendingCount?: number;
   onOpenSidebar: () => void;
   onOpenAnniversary: () => void;
-  onOpenThemeModal: () => void;
+  onOpenThemeModal?: () => void;
   onSendNudge: () => void;
   onToggleSound: () => void;
   onToggleStealth: () => void;
@@ -80,15 +80,6 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Synced Theme Switcher */}
-        <button
-          onClick={onOpenThemeModal}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-sm sm:text-base flex items-center justify-center active:scale-92 transition-transform"
-          title="Synced Couple Theme 🎨"
-        >
-          🎨
-        </button>
-
         {/* Love Nudge / Thinking of You */}
         <button
           onClick={onSendNudge}

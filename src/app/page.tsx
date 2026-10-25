@@ -893,7 +893,6 @@ export default function ChatPage() {
           pendingCount={pendingCount}
           onOpenSidebar={() => setSidebarOpen(true)}
           onOpenAnniversary={() => setAnniversaryModalOpen(true)}
-          onOpenThemeModal={() => setThemeModalOpen(true)}
           onSendNudge={handleSendNudge}
           onToggleSound={() => setSoundEnabled((prev) => !prev)}
           onToggleStealth={() => setIsStealth(true)}
