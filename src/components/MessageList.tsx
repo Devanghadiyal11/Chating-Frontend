@@ -7,6 +7,8 @@ import { burstHearts } from "@/lib/audio";
 interface MessageListProps {
   messages: ChatMessage[];
   currentUser: string;
+  isPartnerTyping?: boolean;
+  partnerName?: string | null;
   onToggleReaction: (msgId: string, emoji: string) => void;
   onDeleteMessage: (msgId: string) => void;
   onOpenPhoto: (src: string, sender: string, time: string) => void;
@@ -16,6 +18,8 @@ interface MessageListProps {
 export const MessageList = React.memo(function MessageList({
   messages,
   currentUser,
+  isPartnerTyping = false,
+  partnerName = null,
   onToggleReaction,
   onDeleteMessage,
   onOpenPhoto,
@@ -27,8 +31,8 @@ export const MessageList = React.memo(function MessageList({
   const lastTapRef = useRef<number>(0);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [messages.length, isPartnerTyping]);
 
   const formatTime = (ms: number) => {
     return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
@@ -254,6 +258,18 @@ export const MessageList = React.memo(function MessageList({
           </React.Fragment>
         );
       })}
+
+      {/* Live typing indicator bubble */}
+      {isPartnerTyping && (
+        <div className="flex items-center gap-2 self-start bg-[var(--bg-card)] border border-[var(--border)] px-3.5 py-2 rounded-2xl rounded-tl-xs text-xs text-[var(--text-sub)] animate-fade-in shadow-xs">
+          <span className="font-semibold text-white/80">{partnerName || "Partner"} is typing</span>
+          <span className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0s]"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.18s]"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce [animation-delay:0.36s]"></span>
+          </span>
+        </div>
+      )}
 
       <div ref={bottomRef} />
     </div>

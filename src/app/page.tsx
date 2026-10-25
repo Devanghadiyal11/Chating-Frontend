@@ -48,6 +48,7 @@ export default function ChatPage() {
 
   // Messages State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
 
   // Modals & Drawers
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -420,6 +421,11 @@ export default function ChatPage() {
           }
 
           // 2. Presence & Delivery Status Updates
+          if (msg.type === "typing") {
+            setIsPartnerTyping(Boolean(msg.is_typing));
+            return;
+          }
+
           if (msg.type === "msg_status") {
             setMessages((prev) =>
               prev.map((m) => (m.id === msg.msg_id ? { ...m, status: msg.status } : m))
@@ -589,8 +595,8 @@ export default function ChatPage() {
     setSessionToken("");
   };
 
-  // Send Message
-  const handleSendMessage = async (content: string, stagedPhoto: string | null) => {
+  // Send Message (Instant WebSocket dispatch, non-blocking background IndexedDB write)
+  const handleSendMessage = (content: string, stagedPhoto: string | null) => {
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
     const replyDoc = replyTarget
@@ -617,14 +623,11 @@ export default function ChatPage() {
       reactions: {},
     };
 
-    // Optimistic render & clear reply preview
+    // 1. Instant optimistic local render & clear reply preview (0ms)
     setMessages((prev) => [...prev, payload]);
     setReplyTarget(null);
 
-    // Save to durable IndexedDB queue
-    await savePendingMessage(payload as PendingMessage);
-    refreshPendingCount();
-
+    // 2. Dispatch over WebSocket IMMEDIATELY (0ms wait!)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload));
       setMessages((prev) =>
@@ -637,7 +640,7 @@ export default function ChatPage() {
         body: JSON.stringify(payload),
       }).then(async (res) => {
         if (res.ok) {
-          await removePendingMessage(clientMessageId);
+          removePendingMessage(clientMessageId).catch(() => {});
           refreshPendingCount();
           setMessages((prev) =>
             prev.map((m) => (m.id === clientMessageId ? { ...m, status: "sent" } : m))
@@ -645,10 +648,13 @@ export default function ChatPage() {
         }
       }).catch(() => {});
     }
+
+    // 3. Asynchronously write to durable IndexedDB queue in background without blocking network
+    savePendingMessage(payload as PendingMessage).then(refreshPendingCount).catch(() => {});
   };
 
-  // Send Audio Note
-  const handleSendAudio = async (audioBase64: string, durationSec: number) => {
+  // Send Audio Note (Instant WebSocket dispatch)
+  const handleSendAudio = (audioBase64: string, durationSec: number) => {
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
     const replyDoc = replyTarget
@@ -678,9 +684,6 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, payload]);
     setReplyTarget(null);
 
-    await savePendingMessage(payload as PendingMessage);
-    refreshPendingCount();
-
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload));
       setMessages((prev) =>
@@ -693,7 +696,7 @@ export default function ChatPage() {
         body: JSON.stringify(payload),
       }).then(async (res) => {
         if (res.ok) {
-          await removePendingMessage(clientMessageId);
+          removePendingMessage(clientMessageId).catch(() => {});
           refreshPendingCount();
           setMessages((prev) =>
             prev.map((m) => (m.id === clientMessageId ? { ...m, status: "sent" } : m))
@@ -701,7 +704,16 @@ export default function ChatPage() {
         }
       }).catch(() => {});
     }
+
+    savePendingMessage(payload as PendingMessage).then(refreshPendingCount).catch(() => {});
   };
+
+  // Live Typing Broadcast
+  const handleTyping = useCallback((isTyping: boolean) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing", is_typing: isTyping }));
+    }
+  }, []);
 
   // Love Nudge with 5s Cooldown
   const handleSendNudge = () => {
@@ -865,6 +877,8 @@ export default function ChatPage() {
         <MessageList
           messages={messages}
           currentUser={currentUser}
+          isPartnerTyping={isPartnerTyping}
+          partnerName={onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase()) || null}
           onToggleReaction={handleToggleReaction}
           onDeleteMessage={handleDeleteMessage}
           onOpenPhoto={(src, sender, time) => setActivePhoto({ src, sender, time })}
@@ -878,6 +892,7 @@ export default function ChatPage() {
           nudgeCooldown={nudgeCooldown}
           replyTarget={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
+          onTyping={handleTyping}
         />
       </main>
 
