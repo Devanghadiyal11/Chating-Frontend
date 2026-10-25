@@ -86,6 +86,19 @@ export default function ChatPage() {
   // Reply Target State
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
 
+  // Stable references for async callbacks and WebSocket listeners
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+
+  const sessionTokenRef = useRef(sessionToken);
+  sessionTokenRef.current = sessionToken;
+
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
+  const currentThemeRef = useRef(currentTheme);
+  currentThemeRef.current = currentTheme;
+
   const wsRef = useRef<WebSocket | null>(null);
   const lastSeenIdRef = useRef<string | null>(null);
   const maxSeqRef = useRef<number>(0);
@@ -106,13 +119,20 @@ export default function ChatPage() {
     setDaysTogether(diff);
   }, []);
 
-  // Set theme helper
-  const applyThemeStyle = (theme: ThemeType) => {
+  // Stable Set Theme Helper (Prevents unnecessary re-renders)
+  const applyThemeStyle = useCallback((theme: ThemeType) => {
+    if (currentThemeRef.current === theme && typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === theme) {
+      return;
+    }
+    currentThemeRef.current = theme;
     setCurrentTheme(theme);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("couple_theme", theme);
+    }
     if (typeof document !== "undefined") {
       document.documentElement.setAttribute("data-theme", theme);
     }
-  };
+  }, []);
 
   // Initial Load from localStorage & Offline Queue check
   useEffect(() => {
@@ -141,7 +161,7 @@ export default function ChatPage() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [refreshPendingCount]);
+  }, [refreshPendingCount, applyThemeStyle]);
 
   // Keyboard shortcut for Panic/Stealth mode
   useEffect(() => {
@@ -159,28 +179,34 @@ export default function ChatPage() {
     } else {
       fetch(`${API_BASE}/api/ack`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionTokenRef.current) },
         body: JSON.stringify({ msg_id: msgId, status }),
       }).catch(() => {});
     }
-  }, [sessionToken]);
+  }, []);
 
-  // Load chat history & missed messages using strict monotonic sequence or since_id
+  // Load chat history & missed messages (No-op if no new messages to prevent list re-rendering)
   const loadHistory = useCallback(async () => {
-    if (!currentUser) return;
+    const user = currentUserRef.current;
+    const token = sessionTokenRef.current;
+    if (!user) return;
     try {
-      let url = `${API_BASE}/api/messages?username=${encodeURIComponent(currentUser)}`;
+      let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
       if (maxSeqRef.current > 0) {
         url += `&after_seq=${maxSeqRef.current}`;
       } else if (lastSeenIdRef.current) {
         url += `&since_id=${encodeURIComponent(lastSeenIdRef.current)}`;
       }
-      const res = await fetch(url, { headers: getAuthHeaders(sessionToken) });
+      const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
         const incoming: ChatMessage[] = data.messages || [];
         if (incoming.length > 0) {
           setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const newItems = incoming.filter((m) => !existingIds.has(m.id));
+            if (newItems.length === 0) return prev; // Do not trigger unnecessary re-renders!
+
             const map = new Map<string, ChatMessage>();
             prev.forEach((m) => {
               map.set(m.id, m);
@@ -191,8 +217,7 @@ export default function ChatPage() {
               if (m.clientMessageId) map.set(m.clientMessageId, m);
               lastSeenIdRef.current = m.id;
               if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
-              // Send ACK for incoming partner messages
-              if (m.sender.toLowerCase() !== currentUser.toLowerCase()) {
+              if (m.sender.toLowerCase() !== user.toLowerCase()) {
                 sendAck(m.id, "delivered");
               }
             });
@@ -208,57 +233,73 @@ export default function ChatPage() {
     } catch {
       // Offline fallback
     }
-  }, [currentUser, sessionToken, sendAck]);
+  }, [sendAck]);
 
-  // Load Checkin
+  // Load Checkin (Strict equality check to prevent banner flicker)
   const loadCheckin = useCallback(async () => {
+    const user = currentUserRef.current;
+    const token = sessionTokenRef.current;
+    if (!user) return;
     try {
-      const res = await fetch(`${API_BASE}/api/checkin`, { headers: getAuthHeaders(sessionToken) });
+      const res = await fetch(`${API_BASE}/api/checkin`, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
         const checkins: Record<string, CheckInDoc> = data.checkins || {};
-        const myLower = currentUser.toLowerCase();
+        const myLower = user.toLowerCase();
         let partnerDoc: CheckInDoc | null = null;
         for (const [key, doc] of Object.entries(checkins)) {
           if (key !== myLower) partnerDoc = doc;
         }
-        setPartnerCheckin(partnerDoc);
+        setPartnerCheckin((prev) => {
+          if (!prev && !partnerDoc) return null;
+          if (
+            prev &&
+            partnerDoc &&
+            prev.username === partnerDoc.username &&
+            prev.mood === partnerDoc.mood &&
+            prev.note === partnerDoc.note &&
+            prev.date === partnerDoc.date
+          ) {
+            return prev; // Do not re-render if identical!
+          }
+          return partnerDoc;
+        });
       }
     } catch {}
-  }, [currentUser, sessionToken]);
+  }, []);
 
   // Load Timeline
   const loadTimeline = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/timeline`, { headers: getAuthHeaders(sessionToken) });
+      const res = await fetch(`${API_BASE}/api/timeline`, { headers: getAuthHeaders(sessionTokenRef.current) });
       if (res.ok) {
         const data = await res.json();
         setTimeline(data.timeline || []);
       }
     } catch {}
-  }, [sessionToken]);
+  }, []);
 
   // Load Letters
   const loadLetters = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/letters`, { headers: getAuthHeaders(sessionToken) });
+      const res = await fetch(`${API_BASE}/api/letters`, { headers: getAuthHeaders(sessionTokenRef.current) });
       if (res.ok) {
         const data = await res.json();
         setLetters(data.letters || []);
       }
     } catch {}
-  }, [sessionToken]);
+  }, []);
 
   // Load Memories
   const loadMemories = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/memories`, { headers: getAuthHeaders(sessionToken) });
+      const res = await fetch(`${API_BASE}/api/memories`, { headers: getAuthHeaders(sessionTokenRef.current) });
       if (res.ok) {
         const data = await res.json();
         setMemories(data.memories || []);
       }
     } catch {}
-  }, [sessionToken]);
+  }, []);
 
   // Load Settings
   const loadSettings = useCallback(async () => {
@@ -272,10 +313,12 @@ export default function ChatPage() {
           calcDays(conf.anniversary_date);
         }
         if (conf.disappearing_mode !== undefined) setDisappearingMode(conf.disappearing_mode);
-        if (conf.theme) applyThemeStyle(conf.theme);
+        if (conf.theme && conf.theme !== currentThemeRef.current) {
+          applyThemeStyle(conf.theme);
+        }
       }
     } catch {}
-  }, [calcDays]);
+  }, [calcDays, applyThemeStyle]);
 
   // Flush Outgoing Offline IndexedDB Queue
   const flushQueue = useCallback(async () => {
@@ -292,7 +335,7 @@ export default function ChatPage() {
         } else {
           const res = await fetch(`${API_BASE}/api/send`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
+            headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionTokenRef.current) },
             body: JSON.stringify(item),
           });
           if (res.ok) {
@@ -307,22 +350,28 @@ export default function ChatPage() {
     } catch (e) {
       console.warn("[Queue] Error flushing offline items:", e);
     }
-  }, [sessionToken, refreshPendingCount]);
+  }, [refreshPendingCount]);
 
-  // Connect WebSocket
+  // Connect WebSocket (Decoupled from render states to prevent connection thrashing)
   useEffect(() => {
-    if (!isLoggedIn || !currentUser) return;
+    if (!isLoggedIn) return;
 
     let ws: WebSocket | null = null;
     let heartbeat: NodeJS.Timeout | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
+    let isCleanedUp = false;
 
     const connect = () => {
-      const url = getWsUrl(currentUser, sessionToken);
+      const user = currentUserRef.current;
+      const token = sessionTokenRef.current;
+      if (!user) return;
+
+      const url = getWsUrl(user, token);
       ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (isCleanedUp) return;
         setConnectionStatus("connected");
         flushQueue();
         loadHistory();
@@ -339,6 +388,7 @@ export default function ChatPage() {
       };
 
       ws.onmessage = (e) => {
+        if (isCleanedUp) return;
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === "pong") return;
@@ -351,7 +401,6 @@ export default function ChatPage() {
           }
 
           if (msg.type === "partner_online") {
-            // Auto mark sent as delivered
             setMessages((prev) =>
               prev.map((m) => (m.status === "sent" ? { ...m, status: "delivered" } : m))
             );
@@ -359,16 +408,18 @@ export default function ChatPage() {
           }
 
           if (msg.type === "theme_update") {
-            applyThemeStyle(msg.theme);
-            if (msg.sender && msg.sender.toLowerCase() !== currentUser.toLowerCase()) {
-              burstHearts(20);
+            if (msg.theme && msg.theme !== currentThemeRef.current) {
+              applyThemeStyle(msg.theme);
+              if (msg.sender && msg.sender !== "system" && msg.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+                burstHearts(20);
+              }
             }
             return;
           }
 
           if (msg.type === "checkin_update") {
             loadCheckin();
-            if (msg.checkin?.username?.toLowerCase() !== currentUser.toLowerCase()) {
+            if (msg.checkin?.username?.toLowerCase() !== currentUserRef.current.toLowerCase()) {
               burstHearts(15);
             }
             return;
@@ -397,13 +448,15 @@ export default function ChatPage() {
               setAnniversaryDate(conf.anniversary_date);
               calcDays(conf.anniversary_date);
             }
-            if (conf.theme) applyThemeStyle(conf.theme);
+            if (conf.theme && conf.theme !== currentThemeRef.current) {
+              applyThemeStyle(conf.theme);
+            }
             return;
           }
 
           if (msg.type === "nudge") {
             burstHearts(40);
-            playLoveNudgeChime(soundEnabled);
+            playLoveNudgeChime(soundEnabledRef.current);
             return;
           }
 
@@ -441,39 +494,44 @@ export default function ChatPage() {
             removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
           }
 
-          if (chatItem.sender.toLowerCase() !== currentUser.toLowerCase()) {
+          if (chatItem.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
             sendAck(chatItem.id, "delivered");
-            playMessageChime(soundEnabled);
+            playMessageChime(soundEnabledRef.current);
           }
         } catch {}
       };
 
       ws.onclose = () => {
+        if (isCleanedUp) return;
         setConnectionStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "reconnecting");
         if (heartbeat) clearInterval(heartbeat);
         reconnectTimeout = setTimeout(() => connect(), 2000);
       };
 
       ws.onerror = () => {
+        if (isCleanedUp) return;
         setConnectionStatus("reconnecting");
       };
     };
 
     connect();
 
-    // Background Delta Polling (2.5s) for guaranteed background sync
+    // Fallback polling ONLY when offline or disconnected
     const pollInterval = setInterval(() => {
-      loadHistory();
-      flushQueue();
-    }, 2500);
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        loadHistory();
+        flushQueue();
+      }
+    }, 4000);
 
     return () => {
+      isCleanedUp = true;
       if (ws) ws.close();
       if (heartbeat) clearInterval(heartbeat);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       clearInterval(pollInterval);
     };
-  }, [isLoggedIn, currentUser, sessionToken, flushQueue, loadHistory, loadSettings, loadCheckin, loadTimeline, loadLetters, calcDays, sendAck, soundEnabled, refreshPendingCount]);
+  }, [isLoggedIn, flushQueue, loadHistory, loadSettings, loadCheckin, loadTimeline, loadLetters, calcDays, sendAck, applyThemeStyle, refreshPendingCount]);
 
   // Login handler
   const handleLogin = async (name: string, pin: string, avatar: string, remember: boolean) => {

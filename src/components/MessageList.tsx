@@ -13,7 +13,7 @@ interface MessageListProps {
   onReplyMessage?: (msg: ChatMessage) => void;
 }
 
-export function MessageList({
+export const MessageList = React.memo(function MessageList({
   messages,
   currentUser,
   onToggleReaction,
@@ -258,4 +258,4 @@ export function MessageList({
       <div ref={bottomRef} />
     </div>
   );
-}
+});

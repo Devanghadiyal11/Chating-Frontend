@@ -8,7 +8,10 @@ interface CheckinBannerProps {
   onOpenCheckIn: () => void;
 }
 
-export function CheckinBanner({ partnerCheckin, onOpenCheckIn }: CheckinBannerProps) {
+export const CheckinBanner = React.memo(function CheckinBanner({
+  partnerCheckin,
+  onOpenCheckIn,
+}: CheckinBannerProps) {
   const formatTime = (ms: number) => {
     return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
   };
@@ -38,4 +41,4 @@ export function CheckinBanner({ partnerCheckin, onOpenCheckIn }: CheckinBannerPr
       <span className="text-base font-extrabold text-[var(--accent)] pr-1">›</span>
     </div>
   );
-}
+});
