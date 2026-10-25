@@ -213,29 +213,30 @@ export function ChatInput({
         </div>
       )}
 
-      {/* Bottom Tool Row */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        {/* Live Camera Button */}
-        <button
-          onClick={() => startCamera(facingMode)}
-          className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-main)] flex items-center justify-center text-lg shrink-0 active:scale-95 transition-transform"
-          title="Take Live Photo (Live camera only)"
-        >
-          📷
-        </button>
+      {/* Composer Row - Grouped Input Capsule with Tools */}
+      <div className="max-w-3xl mx-auto w-full flex items-center gap-2">
+        {/* Unified Capsule: Media buttons + Text Input + Heart Nudge */}
+        <div className="flex-1 flex items-center bg-[var(--bg-card)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/50 rounded-2xl px-2 py-1 transition-all">
+          {/* Integrated Media Tools */}
+          <div className="flex items-center gap-0.5 shrink-0 text-white/70">
+            <button
+              onClick={() => startCamera(facingMode)}
+              className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
+              title="Take Live Photo (Live camera only)"
+            >
+              📷
+            </button>
+            <button
+              onClick={startRecording}
+              disabled={isRecording}
+              className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
+              title="Record Voice Note"
+            >
+              🎙️
+            </button>
+          </div>
 
-        {/* Voice Note Button */}
-        <button
-          onClick={startRecording}
-          disabled={isRecording}
-          className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-main)] flex items-center justify-center text-lg shrink-0 active:scale-95 transition-transform"
-          title="Record Voice Note"
-        >
-          🎙️
-        </button>
-
-        {/* Input Text Box */}
-        <div className="flex-1 relative">
+          {/* Text Input Box */}
           <input
             type="text"
             value={text}
@@ -244,29 +245,30 @@ export function ChatInput({
               if (e.key === "Enter") handleSend();
             }}
             placeholder="Write something sweet..."
-            className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-base sm:text-sm text-[var(--text-main)] placeholder-[var(--text-sub)]/60 focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="flex-1 bg-transparent px-2.5 py-1.5 text-sm sm:text-base text-[var(--text-main)] placeholder-[var(--text-sub)]/50 focus:outline-none"
           />
+
+          {/* Integrated Thinking of You / Heart Nudge */}
+          <button
+            onClick={onSendNudge}
+            disabled={nudgeCooldown > 0}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-transform shrink-0 active:scale-90 ${
+              nudgeCooldown > 0
+                ? "text-[var(--accent)] font-bold text-xs cursor-not-allowed opacity-60"
+                : "hover:bg-[var(--accent-dim)] text-[var(--accent)] hover:scale-110"
+            }`}
+            title="Thinking of You! 💖"
+          >
+            {nudgeCooldown > 0 ? `${nudgeCooldown}s` : "💖"}
+          </button>
         </div>
 
-        {/* Love Nudge / Thinking of You Shortcut */}
-        <button
-          onClick={onSendNudge}
-          disabled={nudgeCooldown > 0}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center text-base shrink-0 active:scale-95 transition-transform ${
-            nudgeCooldown > 0
-              ? "bg-[var(--bg-card)] border-[var(--border)] text-[var(--accent)] font-black text-xs cursor-not-allowed opacity-75"
-              : "bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--accent)]"
-          }`}
-          title="Thinking of You! 💖"
-        >
-          {nudgeCooldown > 0 ? `${nudgeCooldown}s` : "💖"}
-        </button>
-
-        {/* Send Button */}
+        {/* Compact Accent Send Button */}
         <button
           onClick={handleSend}
           disabled={!text.trim() && !stagedPhoto}
-          className="h-10 px-4 rounded-xl bg-[var(--mine-bg)] text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+          className="h-10 px-4 rounded-xl bg-[var(--accent)] hover:opacity-95 text-white text-xs sm:text-sm font-extrabold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Send message"
         >
           <span>Send</span>
         </button>

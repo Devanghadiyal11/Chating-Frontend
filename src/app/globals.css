@@ -11,7 +11,7 @@
   --text-main: #fdf2f4;
   --text-sub: #fda4af;
   --mine-bg: linear-gradient(135deg, #e11d48, #be123c);
-  --theirs-bg: #1c1524;
+  --theirs-bg: #21192b;
   --theirs-text: #fdf2f4;
   --danger: #ef4444;
 }
@@ -27,7 +27,7 @@
   --text-main: #faf5ff;
   --text-sub: #d8b4fe;
   --mine-bg: linear-gradient(135deg, #9333ea, #7e22ce);
-  --theirs-bg: #1a1630;
+  --theirs-bg: #211c3c;
   --theirs-text: #faf5ff;
   --danger: #ef4444;
 }
@@ -43,7 +43,7 @@
   --text-main: #fff7ed;
   --text-sub: #fdba74;
   --mine-bg: linear-gradient(135deg, #ea580c, #c2410c);
-  --theirs-bg: #291515;
+  --theirs-bg: #301a1a;
   --theirs-text: #fff7ed;
   --danger: #ef4444;
 }
@@ -59,7 +59,7 @@
   --text-main: #ffffff;
   --text-sub: #ff85be;
   --mine-bg: linear-gradient(135deg, #ff2e93, #d91b75);
-  --theirs-bg: #161616;
+  --theirs-bg: #1c1c1c;
   --theirs-text: #ffffff;
   --danger: #ef4444;
 }

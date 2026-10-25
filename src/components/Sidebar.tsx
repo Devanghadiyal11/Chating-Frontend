@@ -86,11 +86,11 @@ export function Sidebar({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-3.5 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
           {/* Days Together */}
           <div
             onClick={onOpenAnniversary}
-            className="p-3.5 rounded-2xl bg-gradient-to-b from-[var(--accent-dim)] to-transparent border border-dashed border-[var(--accent)] text-center cursor-pointer active:scale-98 transition-transform"
+            className="p-3 rounded-2xl bg-gradient-to-b from-[var(--accent-dim)] to-transparent border border-dashed border-[var(--accent)] text-center cursor-pointer active:scale-98 transition-transform"
           >
             <div className="text-2xl font-black text-[var(--accent)]">{daysTogether}</div>
             <div className="text-[11px] text-[var(--text-sub)] font-semibold mt-0.5">
@@ -98,30 +98,11 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* Current Profile */}
-          <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[var(--accent-dim)] border border-[var(--accent)] flex items-center justify-center text-lg">
-                {currentUser.toLowerCase() === "him" ? "🤴" : currentUser.toLowerCase() === "her" ? "👸" : currentAvatar}
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white">
-                  {currentUser.toLowerCase() === "him" ? "Him (You)" : currentUser.toLowerCase() === "her" ? "Her (You)" : `${currentUser} (You)`}
-                </div>
-                <div className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  Active
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Online Partner Card */}
+          {/* Combined Couple Panel (In Our Space) */}
           <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
             <div className="flex items-center justify-between text-[10px] font-extrabold uppercase text-[var(--text-sub)] tracking-wider mb-2">
               <span>In Our Space</span>
               {(() => {
-                const isHim = currentUser.toLowerCase() === "him";
                 const isOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
                 return isOnline ? (
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
@@ -129,51 +110,57 @@ export function Sidebar({
                     Connected 💕
                   </span>
                 ) : (
-                  <span className="text-[var(--text-sub)]">Waiting</span>
+                  <span className="text-[var(--text-sub)]/80">Waiting</span>
                 );
               })()}
             </div>
-            <div className="flex flex-col gap-2">
+
+            <div className="flex flex-col gap-1.5">
+              {/* Partner Card */}
               {(() => {
                 const isHim = currentUser.toLowerCase() === "him";
                 const partnerTitle = isHim ? "Her" : "Him";
                 const partnerAvatar = isHim ? "👸" : "🤴";
                 const isOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
 
-                return isOnline ? (
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--accent-dim)] border border-[var(--accent)]/50">
+                return (
+                  <div
+                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border transition-colors ${
+                      isOnline
+                        ? "bg-[var(--accent-dim)] border-[var(--accent)]/40"
+                        : "bg-[var(--bg-root)] border-[var(--border)] opacity-65"
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span className="text-sm">{partnerAvatar}</span>
+                      <span className="text-base">{partnerAvatar}</span>
                       <span className="text-xs font-bold text-white">{partnerTitle}</span>
-                      <span className="text-xs">💕</span>
+                      {isOnline && <span className="text-xs">💕</span>}
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
-                      Online Now
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] opacity-60">
-                    <div className="flex items-center gap-2 text-xs text-[var(--text-sub)]">
-                      <span className="w-2 h-2 rounded-full bg-gray-500"></span>
-                      <span className="text-sm">{partnerAvatar}</span>
-                      <span>{partnerTitle}</span>
-                    </div>
-                    <span className="text-[10px] text-[var(--text-sub)]">Offline</span>
+                    {isOnline ? (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Online
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[var(--text-sub)]/80 font-medium">Offline</span>
+                    )}
                   </div>
                 );
               })()}
 
-              <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)]">
+              {/* Current User Card */}
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-[var(--bg-root)] border border-[var(--border)]">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span className="text-sm">{currentUser.toLowerCase() === "him" ? "🤴" : "👸"}</span>
-                  <span className="text-xs font-semibold text-white/90">
+                  <span className="text-base">{currentUser.toLowerCase() === "him" ? "🤴" : "👸"}</span>
+                  <span className="text-xs font-bold text-white/90">
                     {currentUser.toLowerCase() === "him" ? "Him" : currentUser.toLowerCase() === "her" ? "Her" : currentUser}
                   </span>
                   <span className="text-[10px] text-[var(--accent)] font-bold">(You)</span>
                 </div>
-                <span className="text-[10px] font-semibold text-emerald-400">Active</span>
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Active
+                </span>
               </div>
             </div>
           </div>

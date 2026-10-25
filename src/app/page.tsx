@@ -958,14 +958,12 @@ export default function ChatPage() {
             <>
               <Header
                 coupleName={coupleName}
-                daysTogether={daysTogether}
                 nudgeCooldown={nudgeCooldown}
                 soundEnabled={soundEnabled}
                 connectionStatus={connectionStatus}
                 pendingCount={pendingCount}
                 partnerName={isPartnerOnline ? partnerDisplayName : null}
                 onOpenSidebar={() => setSidebarOpen(true)}
-                onOpenAnniversary={() => setAnniversaryModalOpen(true)}
                 onSendNudge={handleSendNudge}
                 onToggleSound={() => setSoundEnabled((prev) => !prev)}
               />
