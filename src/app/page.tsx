@@ -12,6 +12,7 @@ import {
   savePendingMessage,
   getPendingMessages,
   removePendingMessage,
+  clearPendingMessages,
 } from "@/lib/indexedDb";
 import { playMessageChime, playLoveNudgeChime, burstHearts } from "@/lib/audio";
 import { Header } from "@/components/Header";
@@ -111,9 +112,11 @@ export default function ChatPage() {
     }
   }, []);
 
-  // Initial Load from localStorage & Offline Queue check
+  // Initial Load & Ephemeral Session Wipe
   useEffect(() => {
     setMounted(true);
+    setMessages([]);
+    clearPendingMessages().catch(() => {});
     refreshPendingCount();
 
     const savedUser = localStorage.getItem("couple_user");
@@ -131,12 +134,25 @@ export default function ChatPage() {
     }
 
     const onOnline = () => setConnectionStatus("reconnecting");
-    const onOffline = () => setConnectionStatus("offline");
+    const onOffline = () => {
+      setConnectionStatus("offline");
+      setMessages([]);
+    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+
+    const onWipe = () => {
+      setMessages([]);
+      clearPendingMessages().catch(() => {});
+    };
+    window.addEventListener("beforeunload", onWipe);
+    window.addEventListener("pagehide", onWipe);
+
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      window.removeEventListener("beforeunload", onWipe);
+      window.removeEventListener("pagehide", onWipe);
     };
   }, [refreshPendingCount, applyThemeStyle]);
 
@@ -283,46 +299,10 @@ export default function ChatPage() {
     } catch {}
   }, [processEvent]);
 
-  // Load chat history (initial fetch)
+  // Ephemeral mode: Do not pull past history from disk storage
   const loadHistory = useCallback(async () => {
-    const user = currentUserRef.current;
-    const token = sessionTokenRef.current;
-    if (!user) return;
-    try {
-      let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
-      if (maxSeqRef.current > 0) {
-        url += `&after_seq=${maxSeqRef.current}`;
-      }
-      const res = await fetch(url, { headers: getAuthHeaders(token) });
-      if (res.ok) {
-        const data = await res.json();
-        const incoming: ChatMessage[] = data.messages || [];
-        if (incoming.length > 0) {
-          setMessages((prev) => {
-            const map = new Map<string, ChatMessage>();
-            prev.forEach((m) => {
-              map.set(m.id, m);
-              if (m.clientMessageId) map.set(m.clientMessageId, m);
-            });
-            incoming.forEach((m) => {
-              map.set(m.id, m);
-              if (m.clientMessageId) map.set(m.clientMessageId, m);
-              if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
-              if (m.sender.toLowerCase() !== user.toLowerCase()) {
-                sendAck(m.id, "delivered");
-              }
-            });
-            const list = Array.from(map.values());
-            list.sort((a, b) => {
-              if (a.seq && b.seq) return a.seq - b.seq;
-              return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
-            });
-            return list;
-          });
-        }
-      }
-    } catch {}
-  }, [sendAck]);
+    // Only messages exchanged while connected in the active session appear
+  }, []);
 
   // Load Settings
   const loadSettings = useCallback(async () => {
@@ -525,6 +505,9 @@ export default function ChatPage() {
       ws.onclose = () => {
         if (isCleanedUp) return;
         setConnectionStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "reconnecting");
+        // Ephemeral mode: When disconnected, wipe old chat from screen
+        setMessages([]);
+        clearPendingMessages().catch(() => {});
         if (heartbeat) clearInterval(heartbeat);
         reconnectTimeout = setTimeout(() => connect(), 2000);
       };
@@ -590,6 +573,8 @@ export default function ChatPage() {
     if (wsRef.current) wsRef.current.close();
     localStorage.removeItem("couple_user");
     localStorage.removeItem("couple_token");
+    setMessages([]);
+    clearPendingMessages().catch(() => {});
     setIsLoggedIn(false);
     setCurrentUser("");
     setSessionToken("");
