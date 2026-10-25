@@ -299,10 +299,80 @@ export default function ChatPage() {
     } catch {}
   }, [processEvent]);
 
+  // 1-Second Chat Section Auto-Reload
+  const reloadChatSection = useCallback(async () => {
+    const user = currentUserRef.current;
+    const token = sessionTokenRef.current;
+    if (!user) return;
+
+    // 1. Reload live chat messages & delivery/reaction updates
+    try {
+      let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
+      if (maxSeqRef.current > 0) {
+        url += `&after_seq=${maxSeqRef.current}`;
+      }
+      const res = await fetch(url, { headers: getAuthHeaders(token) });
+      if (res.ok) {
+        const data = await res.json();
+        const incoming: ChatMessage[] = data.messages || [];
+        if (incoming.length > 0) {
+          setMessages((prev) => {
+            const map = new Map<string, ChatMessage>();
+            prev.forEach((m) => {
+              map.set(m.id, m);
+              if (m.clientMessageId) map.set(m.clientMessageId, m);
+            });
+            let hasNew = false;
+            incoming.forEach((m) => {
+              const existing = map.get(m.id) || (m.clientMessageId ? map.get(m.clientMessageId) : undefined);
+              if (
+                !existing ||
+                existing.status !== m.status ||
+                JSON.stringify(existing.reactions) !== JSON.stringify(m.reactions)
+              ) {
+                hasNew = true;
+              }
+              map.set(m.id, m);
+              if (m.clientMessageId) map.set(m.clientMessageId, m);
+              if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
+              if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
+                sendAck(m.id, "delivered");
+              }
+            });
+            if (!hasNew) return prev; // Do not trigger unnecessary re-renders
+            const list = Array.from(map.values());
+            list.sort((a, b) => {
+              if (a.seq && b.seq) return a.seq - b.seq;
+              return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+            });
+            return list;
+          });
+        }
+      }
+    } catch {}
+
+    // 2. Reload live partner presence every second
+    try {
+      const usersRes = await fetch(`${API_BASE}/api/users?username=${encodeURIComponent(user)}`, {
+        headers: getAuthHeaders(token),
+      });
+      if (usersRes.ok) {
+        const data = await usersRes.json();
+        if (data.users) {
+          setOnlineUsers((prev) => {
+            const s1 = prev.slice().sort().join(",");
+            const s2 = (data.users as string[]).slice().sort().join(",");
+            return s1 === s2 ? prev : data.users;
+          });
+        }
+      }
+    } catch {}
+  }, [sendAck]);
+
   // Ephemeral mode: Do not pull past history from disk storage
   const loadHistory = useCallback(async () => {
-    // Only messages exchanged while connected in the active session appear
-  }, []);
+    reloadChatSection();
+  }, [reloadChatSection]);
 
   // Load Settings
   const loadSettings = useCallback(async () => {
@@ -520,14 +590,10 @@ export default function ChatPage() {
 
     connect();
 
-    // Fallback polling ONLY when offline or disconnected
+    // Auto-reload chat section and presence every 1 second
     const pollInterval = setInterval(() => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        loadHistory();
-        syncMissedEvents();
-        flushQueue();
-      }
-    }, 4000);
+      reloadChatSection();
+    }, 1000);
 
     return () => {
       isCleanedUp = true;
@@ -536,7 +602,7 @@ export default function ChatPage() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       clearInterval(pollInterval);
     };
-  }, [isLoggedIn, flushQueue, loadHistory, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
+  }, [isLoggedIn, flushQueue, loadHistory, reloadChatSection, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
 
   // Login handler
   const handleLogin = async (name: string, pin: string, avatar: string, remember: boolean) => {
