@@ -10,7 +10,6 @@ interface ChatInputProps {
   nudgeCooldown: number;
   replyTarget?: ChatMessage | null;
   onCancelReply?: () => void;
-  onTyping?: (isTyping: boolean) => void;
 }
 
 export function ChatInput({
@@ -20,11 +19,9 @@ export function ChatInput({
   nudgeCooldown,
   replyTarget,
   onCancelReply,
-  onTyping,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [stagedPhoto, setStagedPhoto] = useState<string | null>(null);
-  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -145,21 +142,11 @@ export function ChatInput({
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setText(val);
-    if (onTyping) {
-      onTyping(true);
-      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = setTimeout(() => {
-        onTyping(false);
-      }, 1500);
-    }
+    setText(e.target.value);
   };
 
   const handleSend = () => {
     if (!text.trim() && !stagedPhoto) return;
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    if (onTyping) onTyping(false);
     onSendMessage(text.trim(), stagedPhoto);
     setText("");
     setStagedPhoto(null);

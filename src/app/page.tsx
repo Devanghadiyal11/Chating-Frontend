@@ -49,7 +49,6 @@ export default function ChatPage() {
 
   // Messages State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
 
   // Modals & Drawers
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -478,11 +477,6 @@ export default function ChatPage() {
           }
 
           // 2. Presence & Delivery Status Updates
-          if (msg.type === "typing") {
-            setIsPartnerTyping(Boolean(msg.is_typing));
-            return;
-          }
-
           if (msg.type === "msg_status") {
             setMessages((prev) =>
               prev.map((m) => (m.id === msg.msg_id ? { ...m, status: msg.status } : m))
@@ -498,7 +492,8 @@ export default function ChatPage() {
           }
 
           if (msg.type === "users_update") {
-            setOnlineUsers(msg.users || []);
+            const users: string[] = msg.users || [];
+            setOnlineUsers(users);
             return;
           }
 
@@ -703,6 +698,7 @@ export default function ChatPage() {
       type: stagedPhoto ? "image" : "chat",
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       time_ms: nowMs,
+      seq: nowMs,
       reply_to: replyDoc,
       status: "pending",
       reactions: {},
@@ -761,6 +757,7 @@ export default function ChatPage() {
       type: "audio",
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       time_ms: nowMs,
+      seq: nowMs,
       reply_to: replyDoc,
       status: "pending",
       reactions: {},
@@ -792,13 +789,6 @@ export default function ChatPage() {
 
     savePendingMessage(payload as PendingMessage).then(refreshPendingCount).catch(() => {});
   };
-
-  // Live Typing Broadcast
-  const handleTyping = useCallback((isTyping: boolean) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "typing", is_typing: isTyping }));
-    }
-  }, []);
 
   // Love Nudge with 5s Cooldown
   const handleSendNudge = () => {
@@ -972,26 +962,24 @@ export default function ChatPage() {
               <MessageList
                 messages={messages}
                 currentUser={currentUser}
-                isPartnerTyping={isPartnerTyping}
                 partnerName={partnerDisplayName}
                 onToggleReaction={handleToggleReaction}
                 onDeleteMessage={handleDeleteMessage}
                 onOpenPhoto={(src, sender, time) => setActivePhoto({ src, sender, time })}
                 onReplyMessage={(msg) => setReplyTarget(msg)}
               />
+
+              <ChatInput
+                onSendMessage={handleSendMessage}
+                onSendAudio={handleSendAudio}
+                onSendNudge={handleSendNudge}
+                nudgeCooldown={nudgeCooldown}
+                replyTarget={replyTarget}
+                onCancelReply={() => setReplyTarget(null)}
+              />
             </>
           );
         })()}
-
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          onSendAudio={handleSendAudio}
-          onSendNudge={handleSendNudge}
-          nudgeCooldown={nudgeCooldown}
-          replyTarget={replyTarget}
-          onCancelReply={() => setReplyTarget(null)}
-          onTyping={handleTyping}
-        />
       </main>
 
       {/* Theme Modal */}
