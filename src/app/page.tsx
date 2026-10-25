@@ -949,6 +949,7 @@ export default function ChatPage() {
           soundEnabled={soundEnabled}
           connectionStatus={connectionStatus}
           pendingCount={pendingCount}
+          partnerName={onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase()) || null}
           onOpenSidebar={() => setSidebarOpen(true)}
           onOpenAnniversary={() => setAnniversaryModalOpen(true)}
           onSendNudge={handleSendNudge}

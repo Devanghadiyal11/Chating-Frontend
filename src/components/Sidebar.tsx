@@ -166,24 +166,51 @@ export function Sidebar({
           <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
             <div className="flex items-center justify-between text-[10px] font-extrabold uppercase text-[var(--text-sub)] tracking-wider mb-2">
               <span>In Our Space</span>
-              <span className="text-[var(--accent)]">{onlineUsers.length} online</span>
+              {(() => {
+                const partnerName = onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase());
+                return partnerName ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Connected 💕
+                  </span>
+                ) : (
+                  <span className="text-[var(--text-sub)]">Waiting</span>
+                );
+              })()}
             </div>
-            <div className="flex flex-col gap-1.5">
-              {onlineUsers.length === 0 ? (
-                <div className="text-xs text-[var(--text-sub)]">Waiting for your partner...</div>
-              ) : (
-                onlineUsers.map((u) => {
-                  const isMe = u.toLowerCase() === currentUser.toLowerCase();
-                  return (
-                    <div key={u} className="flex items-center gap-2 text-xs font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      <span className={isMe ? "text-[var(--accent)] font-bold" : "text-white"}>
-                        {u} {isMe ? "(you)" : "💕"}
-                      </span>
+            <div className="flex flex-col gap-2">
+              {(() => {
+                const partnerName = onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase());
+                return partnerName ? (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--accent-dim)] border border-[var(--accent)]/50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-xs font-bold text-white">{partnerName}</span>
+                      <span className="text-xs">💕</span>
                     </div>
-                  );
-                })
-              )}
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                      Online Now
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] opacity-60">
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-sub)]">
+                      <span className="w-2 h-2 rounded-full bg-gray-500"></span>
+                      <span>Partner</span>
+                    </div>
+                    <span className="text-[10px] text-[var(--text-sub)]">Offline</span>
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)]">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span className="text-xs font-semibold text-white/90">{currentUser}</span>
+                  <span className="text-[10px] text-[var(--accent)] font-bold">(You)</span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-400">Active</span>
+              </div>
             </div>
           </div>
 

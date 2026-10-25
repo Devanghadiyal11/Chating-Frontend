@@ -9,6 +9,7 @@ interface HeaderProps {
   soundEnabled: boolean;
   connectionStatus?: "connected" | "reconnecting" | "offline";
   pendingCount?: number;
+  partnerName?: string | null;
   onOpenSidebar: () => void;
   onOpenAnniversary: () => void;
   onOpenThemeModal?: () => void;
@@ -24,6 +25,7 @@ export function Header({
   soundEnabled,
   connectionStatus = "connected",
   pendingCount = 0,
+  partnerName = null,
   onOpenSidebar,
   onOpenAnniversary,
   onOpenThemeModal,
@@ -45,6 +47,12 @@ export function Header({
           <div className="text-sm sm:text-base font-extrabold text-white flex items-center gap-1.5 truncate">
             <span className="truncate">{coupleName}</span>
             <span className="text-xs sm:text-sm">💕</span>
+            {partnerName && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{partnerName} online</span>
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -54,17 +62,19 @@ export function Header({
               <span>✨ Together {daysTogether} days 💕</span>
             </button>
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-[10px]">
-              {connectionStatus === "connected" && (
+              {partnerName ? (
+                <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Connected with {partnerName}
+                </span>
+              ) : connectionStatus === "connected" ? (
                 <span className="text-emerald-400 flex items-center gap-1 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Live
                 </span>
-              )}
-              {connectionStatus === "reconnecting" && (
+              ) : connectionStatus === "reconnecting" ? (
                 <span className="text-amber-400 flex items-center gap-1 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Reconnecting
                 </span>
-              )}
-              {connectionStatus === "offline" && (
+              ) : (
                 <span className="text-rose-400 flex items-center gap-1 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Offline
                 </span>
