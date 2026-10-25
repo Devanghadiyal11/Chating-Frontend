@@ -105,7 +105,7 @@ export const MessageList = React.memo(function MessageList({
   let lastDateLabel = "";
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 bg-transparent">
+    <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 bg-transparent">
       <div className="text-center text-xs text-[var(--text-sub)] py-2 px-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] max-w-sm mx-auto shadow-sm">
         🔒 Welcome to your private couple&apos;s space. Double-tap messages to send love! 💕
       </div>
@@ -113,6 +113,10 @@ export const MessageList = React.memo(function MessageList({
       {messages
         .filter((msg) => Boolean(msg.content?.trim() || msg.image || msg.audio))
         .map((msg) => {
+        const hasText = Boolean(msg.content && msg.content.trim().length > 0);
+        const hasMedia = Boolean(msg.image || msg.audio);
+        if (!hasText && !hasMedia) return null;
+
         const timeMs = Number(msg.time_ms) || Date.now();
         const dateLabel = formatDateLabel(timeMs);
         const showDivider = dateLabel !== lastDateLabel;
@@ -245,7 +249,7 @@ export const MessageList = React.memo(function MessageList({
                   )}
 
                   {/* Text Content */}
-                  {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
+                  {hasText && <div className="whitespace-pre-wrap">{msg.content!.trim()}</div>}
 
                   {/* Hover Quick Actions */}
                   <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--bg-card)] border border-[var(--border)] rounded-full px-1.5 py-0.5 shadow-lg flex items-center gap-1.5 text-xs z-10">

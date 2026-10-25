@@ -25,6 +25,52 @@ import { ThemeModal } from "@/components/modals/ThemeModal";
 import { PhotoLightboxModal } from "@/components/modals/PhotoLightboxModal";
 import { AnniversaryModal } from "@/components/modals/AnniversaryModal";
 import { LoginModal } from "@/components/modals/LoginModal";
+import { ClearConfirmModal } from "@/components/modals/ClearConfirmModal";
+
+// Helper: Determine if two message representations refer to the exact same message
+function isSameMessage(a: ChatMessage, b: ChatMessage): boolean {
+  if (a.id && b.id && a.id === b.id) return true;
+  if (a.clientMessageId && b.clientMessageId && a.clientMessageId === b.clientMessageId) return true;
+  if (a.id && b.clientMessageId && a.id === b.clientMessageId) return true;
+  if (a.clientMessageId && b.id && a.clientMessageId === b.id) return true;
+  return false;
+}
+
+// Helper: Merge and deduplicate messages seamlessly without ghost duplicates or empty bubbles
+function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  const validIncoming = incoming.filter(
+    (m) => Boolean(m.content?.trim() || m.image || m.audio)
+  );
+  if (validIncoming.length === 0) return current;
+
+  const result = [...current];
+
+  for (const item of validIncoming) {
+    const existingIndex = result.findIndex((m) => isSameMessage(m, item));
+    if (existingIndex !== -1) {
+      result[existingIndex] = {
+        ...result[existingIndex],
+        ...item,
+        status:
+          item.status === "seen" || result[existingIndex].status === "seen"
+            ? "seen"
+            : item.status === "delivered" || result[existingIndex].status === "delivered"
+            ? "delivered"
+            : item.status || result[existingIndex].status,
+        reactions: { ...result[existingIndex].reactions, ...item.reactions },
+      };
+    } else {
+      result.push(item);
+    }
+  }
+
+  return result
+    .filter((m) => Boolean(m.content?.trim() || m.image || m.audio))
+    .sort((a, b) => {
+      if (a.seq && b.seq && a.seq !== b.seq) return a.seq - b.seq;
+      return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+    });
+}
 
 export default function ChatPage() {
   const [mounted, setMounted] = useState(false);
@@ -55,6 +101,7 @@ export default function ChatPage() {
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [activePhoto, setActivePhoto] = useState<{ src: string; sender: string; time: string } | null>(null);
   const [anniversaryModalOpen, setAnniversaryModalOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   // Connection & Offline Queue
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
@@ -192,24 +239,7 @@ export default function ChatPage() {
         if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) break;
         if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
-        setMessages((prev) => {
-          const exists = prev.some(
-            (m) => m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
-          );
-          if (exists) {
-            return prev.map((m) =>
-              m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
-                ? { ...m, ...chatItem, status: "sent" }
-                : m
-            );
-          }
-          const updated = [...prev, chatItem];
-          updated.sort((a, b) => {
-            if (a.seq && b.seq) return a.seq - b.seq;
-            return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
-          });
-          return updated;
-        });
+        setMessages((prev) => mergeMessages(prev, [chatItem]));
 
         if (chatItem.clientMessageId) {
           removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
@@ -318,37 +348,13 @@ export default function ChatPage() {
           (m: ChatMessage) => Boolean(m.content?.trim() || m.image || m.audio)
         );
         if (incoming.length > 0) {
-          setMessages((prev) => {
-            const map = new Map<string, ChatMessage>();
-            prev.forEach((m) => {
-              map.set(m.id, m);
-              if (m.clientMessageId) map.set(m.clientMessageId, m);
-            });
-            let hasNew = false;
-            incoming.forEach((m) => {
-              const existing = map.get(m.id) || (m.clientMessageId ? map.get(m.clientMessageId) : undefined);
-              if (
-                !existing ||
-                existing.status !== m.status ||
-                JSON.stringify(existing.reactions) !== JSON.stringify(m.reactions)
-              ) {
-                hasNew = true;
-              }
-              map.set(m.id, m);
-              if (m.clientMessageId) map.set(m.clientMessageId, m);
-              if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
-              if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
-                sendAck(m.id, "delivered");
-              }
-            });
-            if (!hasNew) return prev;
-            const list = Array.from(map.values());
-            list.sort((a, b) => {
-              if (a.seq && b.seq) return a.seq - b.seq;
-              return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
-            });
-            return list.filter((m) => Boolean(m.content?.trim() || m.image || m.audio));
+          incoming.forEach((m) => {
+            if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
+            if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
+              sendAck(m.id, "delivered");
+            }
           });
+          setMessages((prev) => mergeMessages(prev, incoming));
         }
       }
     } catch {}
@@ -553,24 +559,7 @@ export default function ChatPage() {
             if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) return;
             if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
-            setMessages((prev) => {
-              const exists = prev.some(
-                (m) => m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
-              );
-              if (exists) {
-                return prev.map((m) =>
-                  m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
-                    ? { ...m, ...chatItem, status: "sent" }
-                    : m
-                );
-              }
-              const updated = [...prev, chatItem];
-              updated.sort((a, b) => {
-                if (a.seq && b.seq) return a.seq - b.seq;
-                return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
-              });
-              return updated;
-            });
+            setMessages((prev) => mergeMessages(prev, [chatItem]));
 
             if (chatItem.clientMessageId) {
               removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
@@ -717,7 +706,7 @@ export default function ChatPage() {
     };
 
     // 1. Instant optimistic local render & clear reply preview (0ms)
-    setMessages((prev) => [...prev, payload]);
+    setMessages((prev) => mergeMessages(prev, [payload]));
     setReplyTarget(null);
 
     // 2. Dispatch over WebSocket IMMEDIATELY (0ms wait!)
@@ -777,7 +766,7 @@ export default function ChatPage() {
       reactions: {},
     };
 
-    setMessages((prev) => [...prev, payload]);
+    setMessages((prev) => mergeMessages(prev, [payload]));
     setReplyTarget(null);
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -875,15 +864,23 @@ export default function ChatPage() {
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
   };
 
-  // Clear Chat
-  const handleClearChat = async () => {
-    if (!confirm("Clear all conversation history? This cannot be undone.")) return;
+  // Clear Chat Modal Trigger
+  const handleClearChat = () => {
+    setClearConfirmOpen(true);
+  };
+
+  // Execute Clear Chat for both partners
+  const handleExecuteClear = async () => {
+    setClearConfirmOpen(false);
+    setMessages([]);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "chat_clear" }));
+    }
     try {
       await fetch(`${API_BASE}/api/messages`, {
         method: "DELETE",
-        headers: getAuthHeaders(sessionToken),
+        headers: getAuthHeaders(sessionTokenRef.current),
       });
-      setMessages([]);
     } catch {}
   };
 
@@ -948,7 +945,7 @@ export default function ChatPage() {
       />
 
       {/* Main Chat Stream */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden relative">
         {(() => {
           const isPartnerOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
           const partnerDisplayName = currentUser.toLowerCase() === "him"
@@ -1017,6 +1014,13 @@ export default function ChatPage() {
         currentDate={anniversaryDate}
         currentName={coupleName}
         onSave={handleSaveAnniversary}
+      />
+
+      {/* Protected Clear Chat Confirmation Modal */}
+      <ClearConfirmModal
+        isOpen={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={handleExecuteClear}
       />
     </div>
   );

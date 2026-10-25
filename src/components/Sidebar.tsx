@@ -235,13 +235,14 @@ export function Sidebar({
         <div className="p-3.5 border-t border-[var(--border)] flex gap-2">
           <button
             onClick={onClearChat}
-            className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-bold active:scale-95 transition-transform"
+            title="Clear conversation for both partners"
+            className="flex-1 py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-bold active:scale-95 transition-all hover:bg-red-500/25"
           >
-            🗑️ Clear
+            🗑️ Clear Chat
           </button>
           <button
             onClick={onLogout}
-            className="flex-1 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-white text-xs font-bold active:scale-95 transition-transform"
+            className="flex-1 py-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-white text-xs font-bold active:scale-95 transition-transform"
           >
             🚪 Leave
           </button>
