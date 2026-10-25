@@ -4,12 +4,9 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE, getWsUrl, getAuthHeaders } from "@/lib/config";
 import {
   ChatMessage,
-  CheckInDoc,
-  TimelineEvent,
-  OpenWhenLetter,
   ThemeType,
-  MemoryItem,
   PendingMessage,
+  AppEvent,
 } from "@/lib/types";
 import {
   savePendingMessage,
@@ -18,20 +15,12 @@ import {
 } from "@/lib/indexedDb";
 import { playMessageChime, playLoveNudgeChime, burstHearts } from "@/lib/audio";
 import { Header } from "@/components/Header";
-import { QuickBar } from "@/components/QuickBar";
-import { CheckinBanner } from "@/components/CheckinBanner";
 import { MessageList } from "@/components/MessageList";
 import { ChatInput } from "@/components/ChatInput";
 import { Sidebar } from "@/components/Sidebar";
 
 // Modals
 import { ThemeModal } from "@/components/modals/ThemeModal";
-import { CheckInModal } from "@/components/modals/CheckInModal";
-import { TimelineModal } from "@/components/modals/TimelineModal";
-import { LettersModal } from "@/components/modals/LettersModal";
-import { LetterViewerModal } from "@/components/modals/LetterViewerModal";
-import { WriteLetterModal } from "@/components/modals/WriteLetterModal";
-import { MemoriesModal } from "@/components/modals/MemoriesModal";
 import { PhotoLightboxModal } from "@/components/modals/PhotoLightboxModal";
 import { AnniversaryModal } from "@/components/modals/AnniversaryModal";
 import { LoginModal } from "@/components/modals/LoginModal";
@@ -57,27 +46,14 @@ export default function ChatPage() {
   // Love Nudge Cooldown
   const [nudgeCooldown, setNudgeCooldown] = useState(0);
 
-  // Messages & Modules State
+  // Messages State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [partnerCheckin, setPartnerCheckin] = useState<CheckInDoc | null>(null);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
-  const [letters, setLetters] = useState<OpenWhenLetter[]>([]);
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
 
   // Modals & Drawers
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
-  const [checkinModalOpen, setCheckinModalOpen] = useState(false);
-  const [timelineModalOpen, setTimelineModalOpen] = useState(false);
-  const [lettersModalOpen, setLettersModalOpen] = useState(false);
-  const [writeLetterOpen, setWriteLetterOpen] = useState(false);
-  const [activeLetter, setActiveLetter] = useState<OpenWhenLetter | null>(null);
-  const [memoriesModalOpen, setMemoriesModalOpen] = useState(false);
   const [activePhoto, setActivePhoto] = useState<{ src: string; sender: string; time: string } | null>(null);
   const [anniversaryModalOpen, setAnniversaryModalOpen] = useState(false);
-
-  // Stealth Disguise
-  const [isStealth, setIsStealth] = useState(false);
 
   // Connection & Offline Queue
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
@@ -100,8 +76,8 @@ export default function ChatPage() {
   currentThemeRef.current = currentTheme;
 
   const wsRef = useRef<WebSocket | null>(null);
-  const lastSeenIdRef = useRef<string | null>(null);
   const maxSeqRef = useRef<number>(0);
+  const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   // Refresh pending items count from IndexedDB
   const refreshPendingCount = useCallback(async () => {
@@ -119,7 +95,7 @@ export default function ChatPage() {
     setDaysTogether(diff);
   }, []);
 
-  // Stable Set Theme Helper (Prevents unnecessary re-renders)
+  // Stable Set Theme Helper
   const applyThemeStyle = useCallback((theme: ThemeType) => {
     if (currentThemeRef.current === theme && typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === theme) {
       return;
@@ -163,15 +139,6 @@ export default function ChatPage() {
     };
   }, [refreshPendingCount, applyThemeStyle]);
 
-  // Keyboard shortcut for Panic/Stealth mode
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsStealth((prev) => !prev);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   // Send ACK for partner's message
   const sendAck = useCallback((msgId: string, status: "delivered" | "seen" = "delivered") => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -185,7 +152,137 @@ export default function ChatPage() {
     }
   }, []);
 
-  // Load chat history & missed messages (No-op if no new messages to prevent list re-rendering)
+  // Unified Event Processor (Deduplication + Strict Sequence Ordering)
+  const processEvent = useCallback((event: AppEvent) => {
+    if (!event) return;
+
+    if (event.eventId && processedEventIdsRef.current.has(event.eventId)) {
+      return;
+    }
+    if (event.eventId) {
+      processedEventIdsRef.current.add(event.eventId);
+    }
+
+    if (event.seq) {
+      maxSeqRef.current = Math.max(maxSeqRef.current, event.seq);
+    }
+
+    const { type, actorId, payload } = event;
+
+    switch (type) {
+      case "message.created": {
+        const chatItem: ChatMessage = payload as ChatMessage;
+        if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
+
+        setMessages((prev) => {
+          const exists = prev.some(
+            (m) => m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
+          );
+          if (exists) {
+            return prev.map((m) =>
+              m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
+                ? { ...m, ...chatItem, status: "sent" }
+                : m
+            );
+          }
+          const updated = [...prev, chatItem];
+          updated.sort((a, b) => {
+            if (a.seq && b.seq) return a.seq - b.seq;
+            return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+          });
+          return updated;
+        });
+
+        if (chatItem.clientMessageId) {
+          removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
+        }
+
+        if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+          sendAck(chatItem.id, "delivered");
+          playMessageChime(soundEnabledRef.current);
+        }
+        break;
+      }
+
+      case "reaction.updated": {
+        if (payload?.msg_id) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === payload.msg_id ? { ...m, reactions: payload.reactions } : m))
+          );
+          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+            burstHearts(12);
+          }
+        }
+        break;
+      }
+
+      case "nudge.created": {
+        burstHearts(40);
+        playLoveNudgeChime(soundEnabledRef.current);
+        break;
+      }
+
+      case "theme.updated": {
+        if (payload?.theme && payload.theme !== currentThemeRef.current) {
+          applyThemeStyle(payload.theme);
+          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+            burstHearts(20);
+          }
+        }
+        break;
+      }
+
+      case "settings.updated": {
+        const conf = payload?.settings || {};
+        if (conf.couple_name) setCoupleName(conf.couple_name);
+        if (conf.anniversary_date) {
+          setAnniversaryDate(conf.anniversary_date);
+          calcDays(conf.anniversary_date);
+        }
+        if (conf.disappearing_mode !== undefined) setDisappearingMode(conf.disappearing_mode);
+        if (conf.theme && conf.theme !== currentThemeRef.current) {
+          applyThemeStyle(conf.theme);
+        }
+        break;
+      }
+
+      case "message.deleted": {
+        if (payload?.msg_id) {
+          setMessages((prev) => prev.filter((m) => m.id !== payload.msg_id));
+        }
+        break;
+      }
+
+      case "chat.cleared": {
+        setMessages([]);
+        break;
+      }
+
+      default:
+        break;
+    }
+  }, [sendAck, applyThemeStyle, calcDays, refreshPendingCount]);
+
+  // Catch-up Missed Events upon reconnect
+  const syncMissedEvents = useCallback(async () => {
+    const token = sessionTokenRef.current;
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/events?after_seq=${maxSeqRef.current}`, {
+        headers: getAuthHeaders(token),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.events && Array.isArray(data.events)) {
+          for (const ev of data.events) {
+            processEvent(ev);
+          }
+        }
+      }
+    } catch {}
+  }, [processEvent]);
+
+  // Load chat history (initial fetch)
   const loadHistory = useCallback(async () => {
     const user = currentUserRef.current;
     const token = sessionTokenRef.current;
@@ -194,8 +291,6 @@ export default function ChatPage() {
       let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
       if (maxSeqRef.current > 0) {
         url += `&after_seq=${maxSeqRef.current}`;
-      } else if (lastSeenIdRef.current) {
-        url += `&since_id=${encodeURIComponent(lastSeenIdRef.current)}`;
       }
       const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
@@ -203,10 +298,6 @@ export default function ChatPage() {
         const incoming: ChatMessage[] = data.messages || [];
         if (incoming.length > 0) {
           setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const newItems = incoming.filter((m) => !existingIds.has(m.id));
-            if (newItems.length === 0) return prev; // Do not trigger unnecessary re-renders!
-
             const map = new Map<string, ChatMessage>();
             prev.forEach((m) => {
               map.set(m.id, m);
@@ -215,7 +306,6 @@ export default function ChatPage() {
             incoming.forEach((m) => {
               map.set(m.id, m);
               if (m.clientMessageId) map.set(m.clientMessageId, m);
-              lastSeenIdRef.current = m.id;
               if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
               if (m.sender.toLowerCase() !== user.toLowerCase()) {
                 sendAck(m.id, "delivered");
@@ -230,76 +320,8 @@ export default function ChatPage() {
           });
         }
       }
-    } catch {
-      // Offline fallback
-    }
+    } catch {}
   }, [sendAck]);
-
-  // Load Checkin (Strict equality check to prevent banner flicker)
-  const loadCheckin = useCallback(async () => {
-    const user = currentUserRef.current;
-    const token = sessionTokenRef.current;
-    if (!user) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/checkin`, { headers: getAuthHeaders(token) });
-      if (res.ok) {
-        const data = await res.json();
-        const checkins: Record<string, CheckInDoc> = data.checkins || {};
-        const myLower = user.toLowerCase();
-        let partnerDoc: CheckInDoc | null = null;
-        for (const [key, doc] of Object.entries(checkins)) {
-          if (key !== myLower) partnerDoc = doc;
-        }
-        setPartnerCheckin((prev) => {
-          if (!prev && !partnerDoc) return null;
-          if (
-            prev &&
-            partnerDoc &&
-            prev.username === partnerDoc.username &&
-            prev.mood === partnerDoc.mood &&
-            prev.note === partnerDoc.note &&
-            prev.date === partnerDoc.date
-          ) {
-            return prev; // Do not re-render if identical!
-          }
-          return partnerDoc;
-        });
-      }
-    } catch {}
-  }, []);
-
-  // Load Timeline
-  const loadTimeline = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/timeline`, { headers: getAuthHeaders(sessionTokenRef.current) });
-      if (res.ok) {
-        const data = await res.json();
-        setTimeline(data.timeline || []);
-      }
-    } catch {}
-  }, []);
-
-  // Load Letters
-  const loadLetters = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/letters`, { headers: getAuthHeaders(sessionTokenRef.current) });
-      if (res.ok) {
-        const data = await res.json();
-        setLetters(data.letters || []);
-      }
-    } catch {}
-  }, []);
-
-  // Load Memories
-  const loadMemories = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/memories`, { headers: getAuthHeaders(sessionTokenRef.current) });
-      if (res.ok) {
-        const data = await res.json();
-        setMemories(data.memories || []);
-      }
-    } catch {}
-  }, []);
 
   // Load Settings
   const loadSettings = useCallback(async () => {
@@ -352,7 +374,7 @@ export default function ChatPage() {
     }
   }, [refreshPendingCount]);
 
-  // Connect WebSocket (Decoupled from render states to prevent connection thrashing)
+  // Connect WebSocket & Wire Event Stream
   useEffect(() => {
     if (!isLoggedIn) return;
 
@@ -375,10 +397,8 @@ export default function ChatPage() {
         setConnectionStatus("connected");
         flushQueue();
         loadHistory();
+        syncMissedEvents();
         loadSettings();
-        loadCheckin();
-        loadTimeline();
-        loadLetters();
 
         heartbeat = setInterval(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
@@ -393,6 +413,13 @@ export default function ChatPage() {
           const msg = JSON.parse(e.data);
           if (msg.type === "pong") return;
 
+          // 1. Process Unified Event Envelope
+          if (msg.type === "event" && msg.event) {
+            processEvent(msg.event);
+            return;
+          }
+
+          // 2. Presence & Delivery Status Updates
           if (msg.type === "msg_status") {
             setMessages((prev) =>
               prev.map((m) => (m.id === msg.msg_id ? { ...m, status: msg.status } : m))
@@ -407,6 +434,11 @@ export default function ChatPage() {
             return;
           }
 
+          if (msg.type === "users_update") {
+            setOnlineUsers(msg.users || []);
+            return;
+          }
+
           if (msg.type === "theme_update") {
             if (msg.theme && msg.theme !== currentThemeRef.current) {
               applyThemeStyle(msg.theme);
@@ -414,30 +446,6 @@ export default function ChatPage() {
                 burstHearts(20);
               }
             }
-            return;
-          }
-
-          if (msg.type === "checkin_update") {
-            loadCheckin();
-            if (msg.checkin?.username?.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-              burstHearts(15);
-            }
-            return;
-          }
-
-          if (msg.type === "timeline_update" || msg.type === "timeline_delete") {
-            loadTimeline();
-            return;
-          }
-
-          if (msg.type === "letter_new" || msg.type === "letter_opened") {
-            loadLetters();
-            if (msg.type === "letter_new") burstHearts(20);
-            return;
-          }
-
-          if (msg.type === "users_update") {
-            setOnlineUsers(msg.users || []);
             return;
           }
 
@@ -472,31 +480,38 @@ export default function ChatPage() {
             return;
           }
 
-          // Regular chat / photo / audio message
+          // Legacy chat / photo / audio payload fallback
           const chatItem: ChatMessage = msg;
-          if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
+          if (chatItem.id) {
+            if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
-          setMessages((prev) => {
-            const exists = prev.some((m) => m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId));
-            if (exists) {
-              return prev.map((m) => (m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId) ? { ...m, ...chatItem, status: "sent" } : m));
-            }
-            const updated = [...prev, chatItem];
-            updated.sort((a, b) => {
-              if (a.seq && b.seq) return a.seq - b.seq;
-              return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+            setMessages((prev) => {
+              const exists = prev.some(
+                (m) => m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
+              );
+              if (exists) {
+                return prev.map((m) =>
+                  m.id === chatItem.id || (chatItem.clientMessageId && m.clientMessageId === chatItem.clientMessageId)
+                    ? { ...m, ...chatItem, status: "sent" }
+                    : m
+                );
+              }
+              const updated = [...prev, chatItem];
+              updated.sort((a, b) => {
+                if (a.seq && b.seq) return a.seq - b.seq;
+                return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+              });
+              return updated;
             });
-            return updated;
-          });
 
-          // Remove from local IndexedDB queue if this was ours
-          if (chatItem.clientMessageId) {
-            removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
-          }
+            if (chatItem.clientMessageId) {
+              removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
+            }
 
-          if (chatItem.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-            sendAck(chatItem.id, "delivered");
-            playMessageChime(soundEnabledRef.current);
+            if (chatItem.sender && chatItem.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+              sendAck(chatItem.id, "delivered");
+              playMessageChime(soundEnabledRef.current);
+            }
           }
         } catch {}
       };
@@ -520,6 +535,7 @@ export default function ChatPage() {
     const pollInterval = setInterval(() => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         loadHistory();
+        syncMissedEvents();
         flushQueue();
       }
     }, 4000);
@@ -531,7 +547,7 @@ export default function ChatPage() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       clearInterval(pollInterval);
     };
-  }, [isLoggedIn, flushQueue, loadHistory, loadSettings, loadCheckin, loadTimeline, loadLetters, calcDays, sendAck, applyThemeStyle, refreshPendingCount]);
+  }, [isLoggedIn, flushQueue, loadHistory, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
 
   // Login handler
   const handleLogin = async (name: string, pin: string, avatar: string, remember: boolean) => {
@@ -601,7 +617,7 @@ export default function ChatPage() {
       reactions: {},
     };
 
-    // 0ms Optimistic render & clear reply preview
+    // Optimistic render & clear reply preview
     setMessages((prev) => [...prev, payload]);
     setReplyTarget(null);
 
@@ -767,87 +783,7 @@ export default function ChatPage() {
         headers: getAuthHeaders(sessionToken),
       });
       setMessages([]);
-      lastSeenIdRef.current = null;
     } catch {}
-  };
-
-  // Submit Checkin
-  const handleSubmitCheckin = async (mood: string, note: string) => {
-    burstHearts(20);
-    try {
-      const res = await fetch(`${API_BASE}/api/checkin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
-        body: JSON.stringify({ mood, note }),
-      });
-      if (res.ok) {
-        loadCheckin();
-      }
-    } catch {}
-  };
-
-  // Add Milestone
-  const handleAddMilestone = async (ev: Omit<TimelineEvent, "id">) => {
-    burstHearts(16);
-    try {
-      const res = await fetch(`${API_BASE}/api/timeline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
-        body: JSON.stringify(ev),
-      });
-      if (res.ok) {
-        loadTimeline();
-      }
-    } catch {}
-  };
-
-  // Delete Milestone
-  const handleDeleteMilestone = async (id: string) => {
-    if (!confirm("Delete this milestone?")) return;
-    try {
-      await fetch(`${API_BASE}/api/timeline/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(sessionToken),
-      });
-      setTimeline((prev) => prev.filter((x) => x.id !== id));
-    } catch {}
-  };
-
-  // Submit Letter
-  const handleSubmitLetter = async (title: string, content: string, hint: string) => {
-    burstHearts(25);
-    try {
-      const res = await fetch(`${API_BASE}/api/letters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
-        body: JSON.stringify({ title, content, open_hint: hint }),
-      });
-      if (res.ok) {
-        loadLetters();
-        alert("Your letter has been sealed with wax and stored in your space! 💌");
-      }
-    } catch {}
-  };
-
-  // Select / Unseal Letter
-  const handleSelectLetter = async (letter: OpenWhenLetter) => {
-    if (letter.is_sealed !== false) {
-      if (!confirm(`Are you ready to break the wax seal and open: "${letter.title}"? 💕`)) return;
-      burstHearts(35);
-      playLoveNudgeChime(soundEnabled);
-      try {
-        const res = await fetch(`${API_BASE}/api/letters/${encodeURIComponent(letter.id)}/open`, {
-          method: "POST",
-          headers: getAuthHeaders(sessionToken),
-        });
-        if (res.ok) {
-          const d = await res.json();
-          letter = d.letter || letter;
-          loadLetters();
-        }
-      } catch {}
-    }
-    setActiveLetter(letter);
   };
 
   // Save Anniversary & Couple Name
@@ -887,32 +823,6 @@ export default function ChatPage() {
     );
   }
 
-  // Panic / Stealth Screen Disguise
-  if (isStealth) {
-    return (
-      <div
-        onClick={() => setIsStealth(false)}
-        className="fixed inset-0 bg-white text-gray-900 p-8 font-sans z-50 flex flex-col justify-start select-none cursor-pointer"
-      >
-        <div className="flex items-center gap-2 border-b pb-3 mb-6">
-          <span className="text-blue-600 font-bold text-xl">📄 Google Docs</span>
-          <span className="text-gray-400 text-sm">| Q4 Performance Review & Team Sync Notes</span>
-        </div>
-        <div className="max-w-2xl text-sm leading-relaxed text-gray-700 space-y-4">
-          <h1 className="text-xl font-bold text-gray-900">1. Executive Overview</h1>
-          <p>The team achieved 98.4% of OKR milestones during Q4 with consistent throughput across the primary pipeline.</p>
-          <h2 className="text-base font-semibold text-gray-800">2. Key Action Items</h2>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Finalize cross-functional infrastructure migration plan.</li>
-            <li>Review staging latency metrics ahead of client presentation.</li>
-            <li>Schedule weekly sync for upcoming product release.</li>
-          </ul>
-        </div>
-        <div className="mt-auto text-xs text-gray-400">Press ESC or tap anywhere to resume private space 💕</div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex w-full h-full h-[100dvh] overflow-hidden bg-[var(--bg-root)] text-[var(--text-main)]">
       {/* Login Modal */}
@@ -932,10 +842,6 @@ export default function ChatPage() {
         onSelectTheme={handleSelectTheme}
         onChangeDisappearing={handleChangeDisappearing}
         onOpenAnniversary={() => setAnniversaryModalOpen(true)}
-        onOpenCheckIn={() => setCheckinModalOpen(true)}
-        onOpenTimeline={() => setTimelineModalOpen(true)}
-        onOpenLetters={() => setLettersModalOpen(true)}
-        onOpenMemories={() => { loadMemories(); setMemoriesModalOpen(true); }}
         onClearChat={handleClearChat}
         onLogout={handleLogout}
       />
@@ -954,21 +860,6 @@ export default function ChatPage() {
           onOpenAnniversary={() => setAnniversaryModalOpen(true)}
           onSendNudge={handleSendNudge}
           onToggleSound={() => setSoundEnabled((prev) => !prev)}
-          onToggleStealth={() => setIsStealth(true)}
-        />
-
-        <QuickBar
-          currentTheme={currentTheme}
-          onOpenThemeModal={() => setThemeModalOpen(true)}
-          onOpenCheckIn={() => setCheckinModalOpen(true)}
-          onOpenLetters={() => setLettersModalOpen(true)}
-          onOpenTimeline={() => setTimelineModalOpen(true)}
-          onOpenMemories={() => { loadMemories(); setMemoriesModalOpen(true); }}
-        />
-
-        <CheckinBanner
-          partnerCheckin={partnerCheckin}
-          onOpenCheckIn={() => setCheckinModalOpen(true)}
         />
 
         <MessageList
@@ -990,7 +881,7 @@ export default function ChatPage() {
         />
       </main>
 
-      {/* Modals */}
+      {/* Theme Modal */}
       <ThemeModal
         isOpen={themeModalOpen}
         onClose={() => setThemeModalOpen(false)}
@@ -998,54 +889,13 @@ export default function ChatPage() {
         onSelectTheme={handleSelectTheme}
       />
 
-      <CheckInModal
-        isOpen={checkinModalOpen}
-        onClose={() => setCheckinModalOpen(false)}
-        partnerCheckin={partnerCheckin}
-        onSubmitCheckin={handleSubmitCheckin}
-      />
-
-      <TimelineModal
-        isOpen={timelineModalOpen}
-        onClose={() => setTimelineModalOpen(false)}
-        daysTogether={daysTogether}
-        anniversaryDate={anniversaryDate}
-        timeline={timeline}
-        onAddMilestone={handleAddMilestone}
-        onDeleteMilestone={handleDeleteMilestone}
-      />
-
-      <LettersModal
-        isOpen={lettersModalOpen}
-        onClose={() => setLettersModalOpen(false)}
-        letters={letters}
-        onSelectLetter={handleSelectLetter}
-        onOpenWriteModal={() => setWriteLetterOpen(true)}
-      />
-
-      <LetterViewerModal
-        letter={activeLetter}
-        onClose={() => setActiveLetter(null)}
-      />
-
-      <WriteLetterModal
-        isOpen={writeLetterOpen}
-        onClose={() => setWriteLetterOpen(false)}
-        onSubmitLetter={handleSubmitLetter}
-      />
-
-      <MemoriesModal
-        isOpen={memoriesModalOpen}
-        onClose={() => setMemoriesModalOpen(false)}
-        memories={memories}
-        onOpenPhoto={(src, sender, time) => setActivePhoto({ src, sender, time })}
-      />
-
+      {/* Photo Lightbox */}
       <PhotoLightboxModal
         photo={activePhoto}
         onClose={() => setActivePhoto(null)}
       />
 
+      {/* Anniversary & Couple Name Modal */}
       <AnniversaryModal
         isOpen={anniversaryModalOpen}
         onClose={() => setAnniversaryModalOpen(false)}

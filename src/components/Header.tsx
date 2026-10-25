@@ -15,7 +15,6 @@ interface HeaderProps {
   onOpenThemeModal?: () => void;
   onSendNudge: () => void;
   onToggleSound: () => void;
-  onToggleStealth: () => void;
 }
 
 export function Header({
@@ -31,7 +30,6 @@ export function Header({
   onOpenThemeModal,
   onSendNudge,
   onToggleSound,
-  onToggleStealth,
 }: HeaderProps) {
   return (
     <header className="px-3 sm:px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-dark)] flex items-center justify-between shrink-0 z-10">
@@ -111,15 +109,6 @@ export function Header({
           title={soundEnabled ? "Sound: ON" : "Sound: Muted"}
         >
           {soundEnabled ? "🔔" : "🔕"}
-        </button>
-
-        {/* Stealth / Panic Disguise */}
-        <button
-          onClick={onToggleStealth}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-sm sm:text-base flex items-center justify-center active:scale-92 transition-transform"
-          title="Disguise Mode (Panic Esc)"
-        >
-          🕵️
         </button>
       </div>
     </header>

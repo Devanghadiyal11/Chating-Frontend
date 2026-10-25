@@ -16,10 +16,6 @@ interface SidebarProps {
   onSelectTheme: (theme: ThemeType) => void;
   onChangeDisappearing: (seconds: number) => void;
   onOpenAnniversary: () => void;
-  onOpenCheckIn: () => void;
-  onOpenTimeline: () => void;
-  onOpenLetters: () => void;
-  onOpenMemories: () => void;
   onClearChat: () => void;
   onLogout: () => void;
 }
@@ -37,10 +33,6 @@ export function Sidebar({
   onSelectTheme,
   onChangeDisappearing,
   onOpenAnniversary,
-  onOpenCheckIn,
-  onOpenTimeline,
-  onOpenLetters,
-  onOpenMemories,
   onClearChat,
   onLogout,
 }: SidebarProps) {
@@ -103,46 +95,6 @@ export function Sidebar({
             <div className="text-2xl font-black text-[var(--accent)]">{daysTogether}</div>
             <div className="text-[11px] text-[var(--text-sub)] font-semibold mt-0.5">
               Days of Loving You 💕
-            </div>
-          </div>
-
-          {/* Special Moments Hub */}
-          <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)]">
-            <div className="text-[10px] font-extrabold uppercase text-[var(--text-sub)] tracking-wider mb-2">
-              Our Special Moments 💕
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => { onOpenCheckIn(); onClose(); }}
-                className="p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <span className="text-lg">🥰</span>
-                <span className="text-[11px] font-bold text-white">Check-In</span>
-              </button>
-
-              <button
-                onClick={() => { onOpenTimeline(); onClose(); }}
-                className="p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <span className="text-lg">⏳</span>
-                <span className="text-[11px] font-bold text-white">Timeline</span>
-              </button>
-
-              <button
-                onClick={() => { onOpenLetters(); onClose(); }}
-                className="p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <span className="text-lg">💌</span>
-                <span className="text-[11px] font-bold text-white">Letters</span>
-              </button>
-
-              <button
-                onClick={() => { onOpenMemories(); onClose(); }}
-                className="p-2 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <span className="text-lg">📸</span>
-                <span className="text-[11px] font-bold text-white">Memories</span>
-              </button>
             </div>
           </div>
 

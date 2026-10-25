@@ -33,33 +33,6 @@ export interface PendingMessage {
   timestamp: string;
 }
 
-export interface CheckInDoc {
-  username: string;
-  date: string;
-  mood: string;
-  note?: string;
-  updated_at: number;
-}
-
-export interface TimelineEvent {
-  id: string;
-  title: string;
-  date: string;
-  icon?: string;
-  notes?: string;
-}
-
-export interface OpenWhenLetter {
-  id: string;
-  sender: string;
-  title: string;
-  content: string;
-  open_hint?: string;
-  is_sealed: boolean;
-  opened_at?: number | null;
-  created_at: number;
-}
-
 export interface CoupleSettings {
   anniversary_date: string;
   disappearing_mode: number;
@@ -67,11 +40,12 @@ export interface CoupleSettings {
   theme: ThemeType;
 }
 
-export interface MemoryItem {
-  id: string;
-  type: "photo" | "audio";
-  src: string;
-  sender: string;
-  time_ms: number;
-  duration?: number;
+export interface AppEvent {
+  eventId: string;
+  roomId: string;
+  seq: number;
+  type: string;
+  actorId: string;
+  payload: Record<string, any>;
+  createdAt: number;
 }
