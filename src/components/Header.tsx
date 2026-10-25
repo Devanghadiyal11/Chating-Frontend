@@ -10,11 +10,13 @@ interface HeaderProps {
   connectionStatus?: "connected" | "reconnecting" | "offline";
   pendingCount?: number;
   partnerName?: string | null;
+  isReloading?: boolean;
   onOpenSidebar: () => void;
   onOpenAnniversary: () => void;
   onOpenThemeModal?: () => void;
   onSendNudge: () => void;
   onToggleSound: () => void;
+  onReloadChat?: () => void;
 }
 
 export function Header({
@@ -25,11 +27,13 @@ export function Header({
   connectionStatus = "connected",
   pendingCount = 0,
   partnerName = null,
+  isReloading = false,
   onOpenSidebar,
   onOpenAnniversary,
   onOpenThemeModal,
   onSendNudge,
   onToggleSound,
+  onReloadChat,
 }: HeaderProps) {
   return (
     <header className="px-3 sm:px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-dark)] flex items-center justify-between shrink-0 z-10">
@@ -110,6 +114,20 @@ export function Header({
         >
           {soundEnabled ? "🔔" : "🔕"}
         </button>
+
+        {/* Reload Chat Section Only */}
+        {onReloadChat && (
+          <button
+            onClick={onReloadChat}
+            disabled={isReloading}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-sm sm:text-base flex items-center justify-center active:scale-92 transition-all ${
+              isReloading ? "opacity-50 cursor-not-allowed" : "hover:border-[var(--accent)]"
+            }`}
+            title="Reload Chat Section Only"
+          >
+            <span className={isReloading ? "animate-spin" : ""}>🔄</span>
+          </button>
+        )}
       </div>
     </header>
   );

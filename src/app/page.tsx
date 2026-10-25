@@ -60,6 +60,7 @@ export default function ChatPage() {
   // Connection & Offline Queue
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [pendingCount, setPendingCount] = useState(0);
+  const [isReloading, setIsReloading] = useState(false);
 
   // Reply Target State
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
@@ -693,6 +694,42 @@ export default function ChatPage() {
     savePendingMessage(payload as PendingMessage).then(refreshPendingCount).catch(() => {});
   };
 
+  // Reload Chat Section Only (Zero full-page refresh)
+  const handleReloadChat = useCallback(async () => {
+    setIsReloading(true);
+    try {
+      // 1. Soft-ping or reconnect WebSocket cleanly
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "ping" }));
+      }
+
+      // 2. Refresh partner online presence
+      const user = currentUserRef.current;
+      const token = sessionTokenRef.current;
+      if (user) {
+        const usersRes = await fetch(`${API_BASE}/api/users?username=${encodeURIComponent(user)}`, {
+          headers: getAuthHeaders(token),
+        });
+        if (usersRes.ok) {
+          const data = await usersRes.json();
+          if (data.users) setOnlineUsers(data.users);
+        }
+      }
+
+      // 3. Re-sync couple settings
+      await loadSettings();
+
+      // 4. Reset any stuck typing indicator
+      setIsPartnerTyping(false);
+    } catch (e) {
+      console.warn("[Reload] Error reloading chat section:", e);
+    } finally {
+      setTimeout(() => {
+        setIsReloading(false);
+      }, 500);
+    }
+  }, [loadSettings]);
+
   // Live Typing Broadcast
   const handleTyping = useCallback((isTyping: boolean) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -863,10 +900,12 @@ export default function ChatPage() {
                 connectionStatus={connectionStatus}
                 pendingCount={pendingCount}
                 partnerName={isPartnerOnline ? partnerDisplayName : null}
+                isReloading={isReloading}
                 onOpenSidebar={() => setSidebarOpen(true)}
                 onOpenAnniversary={() => setAnniversaryModalOpen(true)}
                 onSendNudge={handleSendNudge}
                 onToggleSound={() => setSoundEnabled((prev) => !prev)}
+                onReloadChat={handleReloadChat}
               />
 
               <MessageList
