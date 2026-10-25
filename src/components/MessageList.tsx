@@ -79,6 +79,30 @@ export const MessageList = React.memo(function MessageList({
     }
   };
 
+  const getSenderRole = (sender: string) => {
+    const isMine = sender.toLowerCase() === currentUser.toLowerCase();
+    if (isMine) {
+      return currentUser.toLowerCase() === "him" ? "Him (You)" : currentUser.toLowerCase() === "her" ? "Her (You)" : "You";
+    }
+    if (currentUser.toLowerCase() === "him") return "Her 💕";
+    if (currentUser.toLowerCase() === "her") return "Him 💕";
+    if (sender.toLowerCase() === "him") return "Him 🤴";
+    if (sender.toLowerCase() === "her") return "Her 👸";
+    return sender;
+  };
+
+  const getSenderAvatar = (sender: string) => {
+    const isMine = sender.toLowerCase() === currentUser.toLowerCase();
+    if (isMine) {
+      return currentUser.toLowerCase() === "him" ? "🤴" : currentUser.toLowerCase() === "her" ? "👸" : "👑";
+    }
+    if (currentUser.toLowerCase() === "him") return "👸";
+    if (currentUser.toLowerCase() === "her") return "🤴";
+    if (sender.toLowerCase() === "him") return "🤴";
+    if (sender.toLowerCase() === "her") return "👸";
+    return "💕";
+  };
+
   // Group messages by date
   let lastDateLabel = "";
 
@@ -113,13 +137,13 @@ export const MessageList = React.memo(function MessageList({
             >
               {/* Avatar initial */}
               <div
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 border ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-sm shrink-0 border ${
                   isMine
                     ? "bg-[var(--accent-dim)] border-[var(--accent)] text-white"
                     : "bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-main)]"
                 }`}
               >
-                {msg.sender.charAt(0).toUpperCase()}
+                {getSenderAvatar(msg.sender)}
               </div>
 
               {/* Message Bubble Column */}
@@ -130,7 +154,7 @@ export const MessageList = React.memo(function MessageList({
                     isMine ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <span className="font-semibold text-white/90">{msg.sender}</span>
+                  <span className="font-semibold text-white/90">{getSenderRole(msg.sender)}</span>
                   <span>{formatTime(timeMs)}</span>
                   {isMine && (
                     <span

@@ -860,30 +860,43 @@ export default function ChatPage() {
 
       {/* Main Chat Stream */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <Header
-          coupleName={coupleName}
-          daysTogether={daysTogether}
-          nudgeCooldown={nudgeCooldown}
-          soundEnabled={soundEnabled}
-          connectionStatus={connectionStatus}
-          pendingCount={pendingCount}
-          partnerName={onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase()) || null}
-          onOpenSidebar={() => setSidebarOpen(true)}
-          onOpenAnniversary={() => setAnniversaryModalOpen(true)}
-          onSendNudge={handleSendNudge}
-          onToggleSound={() => setSoundEnabled((prev) => !prev)}
-        />
+        {(() => {
+          const isPartnerOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
+          const partnerDisplayName = currentUser.toLowerCase() === "him"
+            ? "Her"
+            : currentUser.toLowerCase() === "her"
+            ? "Him"
+            : (onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase()) || "Partner");
 
-        <MessageList
-          messages={messages}
-          currentUser={currentUser}
-          isPartnerTyping={isPartnerTyping}
-          partnerName={onlineUsers.find((u) => u.toLowerCase() !== currentUser.toLowerCase()) || null}
-          onToggleReaction={handleToggleReaction}
-          onDeleteMessage={handleDeleteMessage}
-          onOpenPhoto={(src, sender, time) => setActivePhoto({ src, sender, time })}
-          onReplyMessage={(msg) => setReplyTarget(msg)}
-        />
+          return (
+            <>
+              <Header
+                coupleName={coupleName}
+                daysTogether={daysTogether}
+                nudgeCooldown={nudgeCooldown}
+                soundEnabled={soundEnabled}
+                connectionStatus={connectionStatus}
+                pendingCount={pendingCount}
+                partnerName={isPartnerOnline ? partnerDisplayName : null}
+                onOpenSidebar={() => setSidebarOpen(true)}
+                onOpenAnniversary={() => setAnniversaryModalOpen(true)}
+                onSendNudge={handleSendNudge}
+                onToggleSound={() => setSoundEnabled((prev) => !prev)}
+              />
+
+              <MessageList
+                messages={messages}
+                currentUser={currentUser}
+                isPartnerTyping={isPartnerTyping}
+                partnerName={partnerDisplayName}
+                onToggleReaction={handleToggleReaction}
+                onDeleteMessage={handleDeleteMessage}
+                onOpenPhoto={(src, sender, time) => setActivePhoto({ src, sender, time })}
+                onReplyMessage={(msg) => setReplyTarget(msg)}
+              />
+            </>
+          );
+        })()}
 
         <ChatInput
           onSendMessage={handleSendMessage}
