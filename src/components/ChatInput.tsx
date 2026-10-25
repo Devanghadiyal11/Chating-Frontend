@@ -23,6 +23,14 @@ export function ChatInput({
   const [text, setText] = useState("");
   const [stagedPhoto, setStagedPhoto] = useState<string | null>(null);
 
+  // Photo source popover & gallery upload
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [qualityModalOpen, setQualityModalOpen] = useState(false);
+  const [qualityChoice, setQualityChoice] = useState<"original" | "optimized">("original");
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -89,6 +97,87 @@ export function ChatInput({
     startCamera(nextMode);
   };
 
+  // Gallery File Selection & Quality Processing
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    // Reset file input so selecting the same image triggers again if needed
+    e.target.value = "";
+
+    setPendingFile(file);
+    setQualityChoice("original");
+    setQualityModalOpen(true);
+  };
+
+  const processImage = (file: File, mode: "original" | "optimized"): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const src = event.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+
+          if (mode === "optimized") {
+            const maxDim = 1200;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.72));
+          } else {
+            // Original quality: preserve resolution, cap at max 2560px for safe WS transmission
+            const maxDim = 2560;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.92));
+          }
+        };
+        img.onerror = reject;
+        img.src = src;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleApplyQuality = async () => {
+    if (!pendingFile) return;
+    try {
+      setIsProcessingImage(true);
+      const dataUrl = await processImage(pendingFile, qualityChoice);
+      setStagedPhoto(dataUrl);
+      setQualityModalOpen(false);
+      setPendingFile(null);
+    } catch {
+      alert("Failed to process image. Please try another photo.");
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
   // Audio recording
   const startRecording = async () => {
     try {
@@ -107,7 +196,7 @@ export function ChatInput({
         setRecordDuration((prev) => prev + 1);
       }, 1000);
     } catch {
-      alert("Microphone permission required for voice notes!");
+      alert("Unable to access microphone. Please allow audio permissions!");
     }
   };
 
@@ -115,32 +204,35 @@ export function ChatInput({
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
-      clearInterval(recordIntervalRef.current!);
-      setIsRecording(false);
-      audioChunksRef.current = [];
     }
+    if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+    setIsRecording(false);
+    setRecordDuration(0);
+    audioChunksRef.current = [];
   };
 
   const sendRecording = () => {
     if (!mediaRecorderRef.current || !isRecording) return;
     const duration = recordDuration;
     mediaRecorderRef.current.onstop = () => {
-      clearInterval(recordIntervalRef.current!);
-      setIsRecording(false);
-
-      const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
         onSendAudio(base64, duration);
       };
-      reader.readAsDataURL(blob);
+      reader.readAsDataURL(audioBlob);
+      audioChunksRef.current = [];
     };
 
     mediaRecorderRef.current.stop();
     mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+    if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+    setIsRecording(false);
+    setRecordDuration(0);
   };
 
+  // Text Typing Handler
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
   };
@@ -200,7 +292,7 @@ export function ChatInput({
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-[var(--accent)] font-bold shrink-0">Replying to {replyTarget.sender}:</span>
             <span className="truncate text-[var(--text-sub)]">
-              {replyTarget.content || (replyTarget.type === "image" ? "📷 Live Photo" : replyTarget.type === "audio" ? "🎙️ Voice Note" : "Message")}
+              {replyTarget.content || (replyTarget.type === "image" ? "📷 Photo" : replyTarget.type === "audio" ? "🎙️ Voice Note" : "Message")}
             </span>
           </div>
           <button
@@ -219,14 +311,63 @@ export function ChatInput({
         <div className="flex-1 flex items-center bg-[var(--bg-card)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/50 rounded-2xl px-2 py-1 transition-all">
           {/* Integrated Media Tools */}
           <div className="flex items-center gap-0.5 shrink-0 text-white/70">
+            {/* Camera / Gallery Button with Popover */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPhotoMenuOpen((prev) => !prev)}
+                className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95 text-white/70"
+                title="Send Photo (Camera or Gallery)"
+              >
+                📷
+              </button>
+
+              {/* Hidden Gallery Input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {/* Action Popover: Camera or Gallery */}
+              {photoMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setPhotoMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full left-0 mb-2 w-52 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-1.5 z-30 flex flex-col gap-1 backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoMenuOpen(false);
+                        startCamera(facingMode);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
+                    >
+                      <span className="text-base">📸</span>
+                      <span>Take Live Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
+                    >
+                      <span className="text-base">🖼️</span>
+                      <span>Upload from Gallery</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
-              onClick={() => startCamera(facingMode)}
-              className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
-              title="Take Live Photo (Live camera only)"
-            >
-              📷
-            </button>
-            <button
+              type="button"
               onClick={startRecording}
               disabled={isRecording}
               className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
@@ -250,6 +391,7 @@ export function ChatInput({
 
           {/* Integrated Thinking of You / Heart Nudge */}
           <button
+            type="button"
             onClick={onSendNudge}
             disabled={nudgeCooldown > 0}
             className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-transform shrink-0 active:scale-90 ${
@@ -265,6 +407,7 @@ export function ChatInput({
 
         {/* Compact Accent Send Button */}
         <button
+          type="button"
           onClick={handleSend}
           disabled={!text.trim() && !stagedPhoto}
           className="h-10 px-4 rounded-xl bg-[var(--accent)] hover:opacity-95 text-white text-xs sm:text-sm font-extrabold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
@@ -274,7 +417,7 @@ export function ChatInput({
         </button>
       </div>
 
-      {/* Live Camera Modal (No gallery access, live snapshot only) */}
+      {/* Live Camera Modal */}
       {cameraOpen && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between p-4">
           <div className="w-full flex items-center justify-between text-white text-sm font-bold px-2">
@@ -322,6 +465,118 @@ export function ChatInput({
               className="w-12 h-12 rounded-full bg-white/20 text-white flex items-center justify-center text-sm font-bold"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Send Photo Quality Modal (matches user mockup) */}
+      {pendingFile && qualityModalOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-[#101012] border border-[var(--border)] rounded-3xl p-6 shadow-2xl text-left">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setQualityModalOpen(false);
+                setPendingFile(null);
+              }}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs transition-colors"
+              title="Cancel"
+            >
+              ✕
+            </button>
+
+            {/* Title & Subtitle */}
+            <h3 className="text-white text-lg font-bold flex items-center gap-1.5">
+              <span>Send photo</span>
+              <span>💕</span>
+            </h3>
+            <p className="text-neutral-400 text-xs sm:text-sm mt-1 mb-5">
+              Choose how you want to share your moment.
+            </p>
+
+            {/* Quality Options */}
+            <div className="space-y-3">
+              {/* Original Quality Card */}
+              <div
+                onClick={() => setQualityChoice("original")}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all ${
+                  qualityChoice === "original"
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                    : "border-neutral-800 hover:border-neutral-700 bg-neutral-900/40"
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      qualityChoice === "original" ? "text-[var(--accent)]" : "text-neutral-400"
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="3" y="3" width="18" height="18" rx="3" strokeWidth="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" strokeWidth="2" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 15l-5-5L5 21" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-white font-semibold text-sm sm:text-base">
+                      Original quality
+                    </div>
+                    <div className="text-neutral-400 text-xs sm:text-sm mt-0.5">
+                      Full resolution, larger file
+                    </div>
+                  </div>
+                </div>
+                {qualityChoice === "original" && (
+                  <div className="w-5 h-5 rounded-full border-2 border-[var(--accent)] flex items-center justify-center text-[var(--accent)] text-xs font-bold">
+                    ✓
+                  </div>
+                )}
+              </div>
+
+              {/* Optimized Card */}
+              <div
+                onClick={() => setQualityChoice("optimized")}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all ${
+                  qualityChoice === "optimized"
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                    : "border-neutral-800 hover:border-neutral-700 bg-neutral-900/40"
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      qualityChoice === "optimized" ? "text-[var(--accent)]" : "text-neutral-400"
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-white font-semibold text-sm sm:text-base">
+                      Optimized
+                    </div>
+                    <div className="text-neutral-400 text-xs sm:text-sm mt-0.5">
+                      Smaller file, faster sharing
+                    </div>
+                  </div>
+                </div>
+                {qualityChoice === "optimized" && (
+                  <div className="w-5 h-5 rounded-full border-2 border-[var(--accent)] flex items-center justify-center text-[var(--accent)] text-xs font-bold">
+                    ✓
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Apply Button */}
+            <button
+              onClick={handleApplyQuality}
+              disabled={isProcessingImage}
+              className="w-full mt-6 py-3.5 rounded-full bg-white hover:bg-neutral-200 text-black font-semibold text-sm transition-colors text-center shadow-lg active:scale-98 disabled:opacity-50"
+            >
+              {isProcessingImage ? "Processing photo..." : "Use this option"}
             </button>
           </div>
         </div>
