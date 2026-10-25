@@ -265,7 +265,8 @@ export function ChatInput({
         {/* Send Button */}
         <button
           onClick={handleSend}
-          className="h-10 px-4 rounded-xl bg-[var(--mine-bg)] text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-transform"
+          disabled={!text.trim() && !stagedPhoto}
+          className="h-10 px-4 rounded-xl bg-[var(--mine-bg)] text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <span>Send</span>
         </button>

@@ -347,7 +347,7 @@ export default function ChatPage() {
               if (a.seq && b.seq) return a.seq - b.seq;
               return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
             });
-            return list;
+            return list.filter((m) => Boolean(m.content?.trim() || m.image || m.audio));
           });
         }
       }
@@ -409,6 +409,10 @@ export default function ChatPage() {
       const queue = await getPendingMessages();
       if (!queue.length) return;
       for (const item of queue) {
+        if (!item.content?.trim() && !item.image && !item.audio) {
+          await removePendingMessage(item.clientMessageId);
+          continue;
+        }
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify(item));
           await removePendingMessage(item.clientMessageId);
@@ -456,6 +460,7 @@ export default function ChatPage() {
       ws.onopen = () => {
         if (isCleanedUp) return;
         setConnectionStatus("connected");
+        fetch(`${API_BASE}/api/purge_dummies`).catch(() => {});
         flushQueue();
         loadHistory();
         syncMissedEvents();
@@ -682,6 +687,8 @@ export default function ChatPage() {
 
   // Send Message (Instant WebSocket dispatch, non-blocking background IndexedDB write)
   const handleSendMessage = (content: string, stagedPhoto: string | null) => {
+    if (!content?.trim() && !stagedPhoto) return; // Drop empty attempts
+
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
     const replyDoc = replyTarget
@@ -741,6 +748,8 @@ export default function ChatPage() {
 
   // Send Audio Note (Instant WebSocket dispatch)
   const handleSendAudio = (audioBase64: string, durationSec: number) => {
+    if (!audioBase64) return; // Drop empty attempts
+
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
     const replyDoc = replyTarget
