@@ -188,6 +188,8 @@ export default function ChatPage() {
     switch (type) {
       case "message.created": {
         const chatItem: ChatMessage = payload as ChatMessage;
+        if (!chatItem?.id) break;
+        if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) break;
         if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
         setMessages((prev) => {
@@ -312,7 +314,9 @@ export default function ChatPage() {
       const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
-        const incoming: ChatMessage[] = data.messages || [];
+        const incoming: ChatMessage[] = (data.messages || []).filter(
+          (m: ChatMessage) => Boolean(m.content?.trim() || m.image || m.audio)
+        );
         if (incoming.length > 0) {
           setMessages((prev) => {
             const map = new Map<string, ChatMessage>();
@@ -541,6 +545,7 @@ export default function ChatPage() {
           // Legacy chat / photo / audio payload fallback
           const chatItem: ChatMessage = msg;
           if (chatItem.id) {
+            if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) return;
             if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
             setMessages((prev) => {

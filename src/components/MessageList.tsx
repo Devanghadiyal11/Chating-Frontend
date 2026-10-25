@@ -110,7 +110,9 @@ export const MessageList = React.memo(function MessageList({
         🔒 Welcome to your private couple&apos;s space. Double-tap messages to send love! 💕
       </div>
 
-      {messages.map((msg) => {
+      {messages
+        .filter((msg) => Boolean(msg.content?.trim() || msg.image || msg.audio))
+        .map((msg) => {
         const timeMs = Number(msg.time_ms) || Date.now();
         const dateLabel = formatDateLabel(timeMs);
         const showDivider = dateLabel !== lastDateLabel;
