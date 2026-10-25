@@ -299,13 +299,12 @@ export default function ChatPage() {
     } catch {}
   }, [processEvent]);
 
-  // 1-Second Chat Section Auto-Reload
-  const reloadChatSection = useCallback(async () => {
+  // Part 1: Reload Chat Messages & Reactions (Runs every 5s at offset 0s)
+  const syncMessages = useCallback(async () => {
     const user = currentUserRef.current;
     const token = sessionTokenRef.current;
     if (!user) return;
 
-    // 1. Reload live chat messages & delivery/reaction updates
     try {
       let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
       if (maxSeqRef.current > 0) {
@@ -339,7 +338,7 @@ export default function ChatPage() {
                 sendAck(m.id, "delivered");
               }
             });
-            if (!hasNew) return prev; // Do not trigger unnecessary re-renders
+            if (!hasNew) return prev;
             const list = Array.from(map.values());
             list.sort((a, b) => {
               if (a.seq && b.seq) return a.seq - b.seq;
@@ -350,8 +349,14 @@ export default function ChatPage() {
         }
       }
     } catch {}
+  }, [sendAck]);
 
-    // 2. Reload live partner presence every second
+  // Part 2: Reload Partner Presence (Runs every 5s at offset 1s)
+  const syncPresence = useCallback(async () => {
+    const user = currentUserRef.current;
+    const token = sessionTokenRef.current;
+    if (!user) return;
+
     try {
       const usersRes = await fetch(`${API_BASE}/api/users?username=${encodeURIComponent(user)}`, {
         headers: getAuthHeaders(token),
@@ -367,15 +372,10 @@ export default function ChatPage() {
         }
       }
     } catch {}
-  }, [sendAck]);
+  }, []);
 
-  // Ephemeral mode: Do not pull past history from disk storage
-  const loadHistory = useCallback(async () => {
-    reloadChatSection();
-  }, [reloadChatSection]);
-
-  // Load Settings
-  const loadSettings = useCallback(async () => {
+  // Part 3: Reload Couple Settings, Days Together & Theme (Runs every 5s at offset 2s)
+  const syncSettings = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/settings`);
       if (res.ok) {
@@ -392,6 +392,13 @@ export default function ChatPage() {
       }
     } catch {}
   }, [calcDays, applyThemeStyle]);
+
+  // Ephemeral mode: Initial fetch
+  const loadHistory = useCallback(async () => {
+    syncMessages();
+  }, [syncMessages]);
+
+  const loadSettings = syncSettings;
 
   // Flush Outgoing Offline IndexedDB Queue
   const flushQueue = useCallback(async () => {
@@ -590,9 +597,36 @@ export default function ChatPage() {
 
     connect();
 
-    // Auto-reload chat section and presence every 1 second
-    const pollInterval = setInterval(() => {
-      reloadChatSection();
+    // Staggered 5-Second Dispatcher: Reloads each part of the app every 5 seconds, but NOT at the same time
+    let tick = 0;
+    const staggeredInterval = setInterval(() => {
+      const phase = tick % 5;
+      tick++;
+
+      switch (phase) {
+        case 0:
+          // Part 1: Reload Chat Messages & Reactions (runs at t = 0s, 5s, 10s...)
+          syncMessages();
+          break;
+        case 1:
+          // Part 2: Reload Partner Presence ("Her/Him online 💕") (runs at t = 1s, 6s, 11s...)
+          syncPresence();
+          break;
+        case 2:
+          // Part 3: Reload Couple Settings, Days Counter & Synced Theme (runs at t = 2s, 7s, 12s...)
+          syncSettings();
+          break;
+        case 3:
+          // Part 4: Reload Connection Health & Queue Flush (runs at t = 3s, 8s, 13s...)
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "ping" }));
+          }
+          flushQueue();
+          break;
+        case 4:
+          // Part 5: Smooth network breathing room (runs at t = 4s, 9s, 14s...)
+          break;
+      }
     }, 1000);
 
     return () => {
@@ -600,9 +634,9 @@ export default function ChatPage() {
       if (ws) ws.close();
       if (heartbeat) clearInterval(heartbeat);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      clearInterval(pollInterval);
+      clearInterval(staggeredInterval);
     };
-  }, [isLoggedIn, flushQueue, loadHistory, reloadChatSection, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
+  }, [isLoggedIn, flushQueue, loadHistory, syncMessages, syncPresence, syncSettings, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
 
   // Login handler
   const handleLogin = async (name: string, pin: string, avatar: string, remember: boolean) => {
