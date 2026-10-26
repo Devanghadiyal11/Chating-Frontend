@@ -107,7 +107,12 @@ export function Sidebar({
             <div className="flex items-center justify-between text-[10px] font-extrabold uppercase text-[var(--text-sub)] tracking-wider mb-2">
               <span>In Our Space</span>
               {(() => {
-                const isOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
+                const isHim = currentUser.toLowerCase() === "him";
+                const partnerTargetLower = isHim ? "her" : "him";
+                const isOnline = onlineUsers.some((u) => {
+                  const uLower = u.toLowerCase();
+                  return uLower === partnerTargetLower || (uLower !== currentUser.toLowerCase());
+                });
                 return isOnline ? (
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -125,7 +130,11 @@ export function Sidebar({
                 const isHim = currentUser.toLowerCase() === "him";
                 const partnerTitle = isHim ? "Her" : "Him";
                 const partnerAvatar = isHim ? "👸" : "🤴";
-                const isOnline = onlineUsers.some((u) => u.toLowerCase() !== currentUser.toLowerCase());
+                const partnerTargetLower = isHim ? "her" : "him";
+                const isOnline = onlineUsers.some((u) => {
+                  const uLower = u.toLowerCase();
+                  return uLower === partnerTargetLower || (uLower !== currentUser.toLowerCase());
+                });
 
                 return (
                   <div

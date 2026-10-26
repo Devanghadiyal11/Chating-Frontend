@@ -358,12 +358,8 @@ export default function ChatPage() {
       });
       if (usersRes.ok) {
         const data = await usersRes.json();
-        if (data.users) {
-          setOnlineUsers((prev) => {
-            const s1 = prev.slice().sort().join(",");
-            const s2 = (data.users as string[]).slice().sort().join(",");
-            return s1 === s2 ? prev : data.users;
-          });
+        if (data.users && Array.isArray(data.users)) {
+          setOnlineUsers(data.users);
         }
       }
     } catch {}
@@ -508,6 +504,8 @@ export default function ChatPage() {
           }
 
           if (msg.type === "partner_online") {
+            const partnerUser = msg.username || (currentUserRef.current.toLowerCase() === "him" ? "Her" : "Him");
+            setOnlineUsers((prev) => Array.from(new Set([...prev, partnerUser])));
             setMessages((prev) =>
               prev.map((m) => (m.status === "sent" ? { ...m, status: "delivered" } : m))
             );
