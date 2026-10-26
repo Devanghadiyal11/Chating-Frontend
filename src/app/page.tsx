@@ -14,6 +14,7 @@ import {
   removePendingMessage,
   clearPendingMessages,
 } from "@/lib/indexedDb";
+import { encryptPhoto, decryptPhoto, decryptMessages } from "@/lib/crypto";
 import { playMessageChime, playLoveNudgeChime, burstHearts } from "@/lib/audio";
 import { Header } from "@/components/Header";
 import { MessageList } from "@/components/MessageList";
@@ -261,15 +262,23 @@ export default function ChatPage() {
         if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) break;
         if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
-        setMessages((prev) => mergeMessages(prev, [chatItem]));
+        const handleIncoming = (item: ChatMessage) => {
+          setMessages((prev) => mergeMessages(prev, [item]));
+          if (item.clientMessageId) {
+            removePendingMessage(item.clientMessageId).then(() => refreshPendingCount());
+          }
+          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+            sendAck(item.id, "delivered");
+            playMessageChime(soundEnabledRef.current);
+          }
+        };
 
-        if (chatItem.clientMessageId) {
-          removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
-        }
-
-        if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-          sendAck(chatItem.id, "delivered");
-          playMessageChime(soundEnabledRef.current);
+        if (chatItem.image && chatItem.image.startsWith("enc:v1:")) {
+          decryptPhoto(chatItem.image).then((decrypted) => {
+            handleIncoming({ ...chatItem, image: decrypted });
+          });
+        } else {
+          handleIncoming(chatItem);
         }
         break;
       }
@@ -366,10 +375,11 @@ export default function ChatPage() {
       const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
-        const incoming: ChatMessage[] = (data.messages || []).filter(
+        let incoming: ChatMessage[] = (data.messages || []).filter(
           (m: ChatMessage) => Boolean(m.content?.trim() || m.image || m.audio)
         );
         if (incoming.length > 0) {
+          incoming = await decryptMessages(incoming);
           incoming.forEach((m) => {
             if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
             if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
@@ -431,10 +441,11 @@ export default function ChatPage() {
       const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
-        const incoming: ChatMessage[] = (data.messages || []).filter(
+        let incoming: ChatMessage[] = (data.messages || []).filter(
           (m: ChatMessage) => Boolean(m.content?.trim() || m.image || m.audio)
         );
         if (incoming.length > 0) {
+          incoming = await decryptMessages(incoming);
           incoming.forEach((m) => {
             if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
             if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
@@ -607,15 +618,25 @@ export default function ChatPage() {
             if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) return;
             if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
-            setMessages((prev) => mergeMessages(prev, [chatItem]));
+            const handleLegacyIncoming = (item: ChatMessage) => {
+              setMessages((prev) => mergeMessages(prev, [item]));
 
-            if (chatItem.clientMessageId) {
-              removePendingMessage(chatItem.clientMessageId).then(() => refreshPendingCount());
-            }
+              if (item.clientMessageId) {
+                removePendingMessage(item.clientMessageId).then(() => refreshPendingCount());
+              }
 
-            if (chatItem.sender && chatItem.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-              sendAck(chatItem.id, "delivered");
-              playMessageChime(soundEnabledRef.current);
+              if (item.sender && item.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+                sendAck(item.id, "delivered");
+                playMessageChime(soundEnabledRef.current);
+              }
+            };
+
+            if (chatItem.image && chatItem.image.startsWith("enc:v1:")) {
+              decryptPhoto(chatItem.image).then((dec) => {
+                handleLegacyIncoming({ ...chatItem, image: dec });
+              });
+            } else {
+              handleLegacyIncoming(chatItem);
             }
           }
         } catch {}
@@ -727,7 +748,7 @@ export default function ChatPage() {
   };
 
   // Send Message (Instant WebSocket dispatch, non-blocking background IndexedDB write)
-  const handleSendMessage = (content: string, stagedPhoto: string | null) => {
+  const handleSendMessage = async (content: string, stagedPhoto: string | null) => {
     if (!content?.trim() && !stagedPhoto) return; // Drop empty attempts
 
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -741,7 +762,8 @@ export default function ChatPage() {
         }
       : null;
 
-    const payload: ChatMessage = {
+    // 1. Instant optimistic local render with original photo so sender sees it with 0ms delay
+    const localPayload: ChatMessage = {
       id: clientMessageId,
       clientMessageId,
       msg_id: clientMessageId,
@@ -757,13 +779,23 @@ export default function ChatPage() {
       reactions: {},
     };
 
-    // 1. Instant optimistic local render & clear reply preview (0ms)
-    setMessages((prev) => mergeMessages(prev, [payload]));
+    setMessages((prev) => mergeMessages(prev, [localPayload]));
     setReplyTarget(null);
 
-    // 2. Dispatch over WebSocket IMMEDIATELY (0ms wait!)
+    // 2. Encrypt photo payload before dispatching over the network
+    let wireImage = stagedPhoto;
+    if (stagedPhoto) {
+      wireImage = await encryptPhoto(stagedPhoto);
+    }
+
+    const networkPayload: ChatMessage = {
+      ...localPayload,
+      image: wireImage,
+    };
+
+    // 3. Dispatch over WebSocket or HTTP IMMEDIATELY
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload));
+      wsRef.current.send(JSON.stringify(networkPayload));
       setMessages((prev) =>
         prev.map((m) => (m.id === clientMessageId ? { ...m, status: "sent" } : m))
       );
@@ -771,7 +803,7 @@ export default function ChatPage() {
       fetch(`${API_BASE}/api/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders(sessionToken) },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(networkPayload),
       }).then(async (res) => {
         if (res.ok) {
           removePendingMessage(clientMessageId).catch(() => {});
@@ -783,8 +815,8 @@ export default function ChatPage() {
       }).catch(() => {});
     }
 
-    // 3. Asynchronously write to durable IndexedDB queue in background without blocking network
-    savePendingMessage(payload as PendingMessage).then(refreshPendingCount).catch(() => {});
+    // 4. Asynchronously write encrypted payload to durable IndexedDB queue in background
+    savePendingMessage(networkPayload as PendingMessage).then(refreshPendingCount).catch(() => {});
   };
 
   // Send Audio Note (Instant WebSocket dispatch)
