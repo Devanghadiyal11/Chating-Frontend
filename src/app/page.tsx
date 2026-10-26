@@ -596,8 +596,14 @@ export default function ChatPage() {
 
     connect();
     loadHistory();
+    syncPresence();
 
-    // Staggered 5-Second Dispatcher: Reloads each part of the app every 5 seconds, but NOT at the same time
+    // Dedicated 3-Second Reload: "In Our Space" partner presence reloads every 3 seconds
+    const presenceInterval = setInterval(() => {
+      syncPresence();
+    }, 3000);
+
+    // Staggered 5-Second Dispatcher: Reloads other parts of the app every 5 seconds, but NOT at the same time
     let tick = 0;
     const staggeredInterval = setInterval(() => {
       const phase = tick % 5;
@@ -609,8 +615,10 @@ export default function ChatPage() {
           syncMessages();
           break;
         case 1:
-          // Part 2: Reload Partner Presence ("Her/Him online 💕") (runs at t = 1s, 6s, 11s...)
-          syncPresence();
+          // Part 2: Heartbeat Ping / WebSocket Health
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "ping" }));
+          }
           break;
         case 2:
           // Part 3: Reload Couple Settings, Days Counter & Synced Theme (runs at t = 2s, 7s, 12s...)
@@ -618,9 +626,6 @@ export default function ChatPage() {
           break;
         case 3:
           // Part 4: Reload Connection Health & Queue Flush (runs at t = 3s, 8s, 13s...)
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: "ping" }));
-          }
           flushQueue();
           break;
         case 4:
@@ -635,6 +640,7 @@ export default function ChatPage() {
       if (heartbeat) clearInterval(heartbeat);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       clearInterval(staggeredInterval);
+      clearInterval(presenceInterval);
     };
   }, [isLoggedIn, flushQueue, loadHistory, syncMessages, syncPresence, syncSettings, syncMissedEvents, loadSettings, calcDays, sendAck, applyThemeStyle, refreshPendingCount, processEvent]);
 
