@@ -10,6 +10,7 @@ interface HeaderProps {
   pendingCount?: number;
   partnerName?: string | null;
   onOpenSidebar: () => void;
+  onEditCoupleName?: () => void;
   onSendNudge: () => void;
   onToggleSound: () => void;
 }
@@ -22,6 +23,7 @@ export function Header({
   pendingCount = 0,
   partnerName = null,
   onOpenSidebar,
+  onEditCoupleName,
   onSendNudge,
   onToggleSound,
 }: HeaderProps) {
@@ -36,10 +38,20 @@ export function Header({
           ☰
         </button>
         <div className="flex flex-col min-w-0">
-          <div className="text-sm sm:text-base font-extrabold text-white flex items-center gap-1.5 truncate">
-            <span className="truncate">{coupleName}</span>
+          <button
+            type="button"
+            onClick={onEditCoupleName}
+            className="flex items-center gap-1.5 text-left active:scale-95 transition-transform cursor-pointer group"
+            title="Click to edit couple name 💕"
+          >
+            <span className="text-sm sm:text-base font-extrabold text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md">
+              {coupleName}
+            </span>
             <span className="text-xs sm:text-sm">💕</span>
-          </div>
+            <span className="text-xs text-[var(--accent)] opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all">
+              ✏️
+            </span>
+          </button>
 
           {/* One Clear Connection Indicator */}
           <div className="flex items-center gap-1.5 text-[10px] mt-0.5">

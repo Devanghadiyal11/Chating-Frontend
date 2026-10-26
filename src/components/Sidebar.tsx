@@ -64,13 +64,18 @@ export function Sidebar({
       >
         {/* Sidebar Header */}
         <div className="h-16 px-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
+          <div
+            onClick={onOpenAnniversary}
+            className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity"
+            title="Click to edit couple name 💕"
+          >
             <div className="w-10 h-10 rounded-xl bg-[var(--accent-dim)] border border-[var(--accent)] flex items-center justify-center text-xl shadow-sm">
               💖
             </div>
             <div>
-              <div className="font-extrabold text-white text-sm truncate max-w-[170px]">
-                {coupleName}
+              <div className="font-extrabold text-white text-sm truncate max-w-[170px] flex items-center gap-1">
+                <span className="truncate">{coupleName}</span>
+                <span className="text-[10px] text-[var(--accent)] opacity-80 group-hover:opacity-100">✏️</span>
               </div>
               <div className="text-[11px] text-[var(--accent)] font-semibold">
                 Private Couple Space 💕

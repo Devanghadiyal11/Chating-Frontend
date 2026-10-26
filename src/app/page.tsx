@@ -976,6 +976,7 @@ export default function ChatPage() {
                 pendingCount={pendingCount}
                 partnerName={isPartnerOnline ? partnerDisplayName : null}
                 onOpenSidebar={() => setSidebarOpen(true)}
+                onEditCoupleName={() => setAnniversaryModalOpen(true)}
                 onSendNudge={handleSendNudge}
                 onToggleSound={() => setSoundEnabled((prev) => !prev)}
               />
