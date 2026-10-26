@@ -158,11 +158,9 @@ export default function ChatPage() {
     }
   }, []);
 
-  // Initial Load & Ephemeral Session Wipe
+  // Initial Load & Session Initialization
   useEffect(() => {
     setMounted(true);
-    setMessages([]);
-    clearPendingMessages().catch(() => {});
     refreshPendingCount();
 
     const savedUser = localStorage.getItem("couple_user");
@@ -180,25 +178,13 @@ export default function ChatPage() {
     }
 
     const onOnline = () => setConnectionStatus("reconnecting");
-    const onOffline = () => {
-      setConnectionStatus("offline");
-      setMessages([]);
-    };
+    const onOffline = () => setConnectionStatus("offline");
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-
-    const onWipe = () => {
-      setMessages([]);
-      clearPendingMessages().catch(() => {});
-    };
-    window.addEventListener("beforeunload", onWipe);
-    window.addEventListener("pagehide", onWipe);
 
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      window.removeEventListener("beforeunload", onWipe);
-      window.removeEventListener("pagehide", onWipe);
     };
   }, [refreshPendingCount, applyThemeStyle]);
 
@@ -402,10 +388,32 @@ export default function ChatPage() {
     } catch {}
   }, [calcDays, applyThemeStyle]);
 
-  // Ephemeral mode: Initial fetch
+  // Persistent Chat: Initial fetch of full chat history on join / rejoin
   const loadHistory = useCallback(async () => {
-    syncMessages();
-  }, [syncMessages]);
+    const user = currentUserRef.current;
+    const token = sessionTokenRef.current;
+    if (!user) return;
+
+    try {
+      const url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
+      const res = await fetch(url, { headers: getAuthHeaders(token) });
+      if (res.ok) {
+        const data = await res.json();
+        const incoming: ChatMessage[] = (data.messages || []).filter(
+          (m: ChatMessage) => Boolean(m.content?.trim() || m.image || m.audio)
+        );
+        if (incoming.length > 0) {
+          incoming.forEach((m) => {
+            if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
+            if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
+              sendAck(m.id, "delivered");
+            }
+          });
+          setMessages((prev) => mergeMessages(prev, incoming));
+        }
+      }
+    } catch {}
+  }, [sendAck]);
 
   const loadSettings = syncSettings;
 
@@ -576,9 +584,6 @@ export default function ChatPage() {
       ws.onclose = () => {
         if (isCleanedUp) return;
         setConnectionStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "reconnecting");
-        // Ephemeral mode: When disconnected, wipe old chat from screen
-        setMessages([]);
-        clearPendingMessages().catch(() => {});
         if (heartbeat) clearInterval(heartbeat);
         reconnectTimeout = setTimeout(() => connect(), 2000);
       };
@@ -590,6 +595,7 @@ export default function ChatPage() {
     };
 
     connect();
+    loadHistory();
 
     // Staggered 5-Second Dispatcher: Reloads each part of the app every 5 seconds, but NOT at the same time
     let tick = 0;
