@@ -182,9 +182,25 @@ export default function ChatPage() {
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
+    const onLeave = () => {
+      const u = currentUserRef.current;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.close();
+        } catch {}
+      }
+      if (u && typeof navigator !== "undefined" && navigator.sendBeacon) {
+        navigator.sendBeacon(`${API_BASE}/api/leave?username=${encodeURIComponent(u)}`);
+      }
+    };
+    window.addEventListener("beforeunload", onLeave);
+    window.addEventListener("pagehide", onLeave);
+
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      window.removeEventListener("beforeunload", onLeave);
+      window.removeEventListener("pagehide", onLeave);
     };
   }, [refreshPendingCount, applyThemeStyle]);
 
@@ -509,6 +525,12 @@ export default function ChatPage() {
             setMessages((prev) =>
               prev.map((m) => (m.status === "sent" ? { ...m, status: "delivered" } : m))
             );
+            return;
+          }
+
+          if (msg.type === "partner_offline") {
+            const offlineUser = msg.username ? msg.username.toLowerCase() : "";
+            setOnlineUsers((prev) => prev.filter((u) => u.toLowerCase() !== offlineUser));
             return;
           }
 
