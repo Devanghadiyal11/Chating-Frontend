@@ -23,13 +23,24 @@ export const MessageList = React.memo(function MessageList({
   onOpenPhoto,
   onReplyMessage,
 }: MessageListProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef<boolean>(true);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const lastTapRef = useRef<number>(0);
 
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 150;
+  };
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    }
   }, [messages.length]);
 
   const formatTime = (ms: number) => {
@@ -105,14 +116,20 @@ export const MessageList = React.memo(function MessageList({
     return "💕";
   };
 
-  // Filter valid messages to prevent empty bubbles
-  const validMessages = messages.filter((msg) => Boolean(msg.content?.trim() || msg.image || msg.audio));
+  // Filter valid messages to prevent empty bubbles (memoized for performance)
+  const validMessages = React.useMemo(() => {
+    return messages.filter((msg) => Boolean(msg.content?.trim() || msg.image || msg.audio));
+  }, [messages]);
 
   // Date divider tracking
   let lastDateLabel = "";
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col bg-transparent">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col bg-transparent"
+    >
       <div className="max-w-3xl xl:max-w-4xl mx-auto w-full flex flex-col flex-1">
         {/* Subtle Welcome Header */}
         {validMessages.length > 0 ? (

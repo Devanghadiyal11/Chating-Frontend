@@ -43,24 +43,44 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
   );
   if (validIncoming.length === 0) return current;
 
+  // Build fast-lookup index map for O(1) lookups
+  const map = new Map<string, number>();
   const result = [...current];
 
+  result.forEach((m, idx) => {
+    if (m.id) map.set(m.id, idx);
+    if (m.clientMessageId) map.set(m.clientMessageId, idx);
+  });
+
   for (const item of validIncoming) {
-    const existingIndex = result.findIndex((m) => isSameMessage(m, item));
-    if (existingIndex !== -1) {
-      result[existingIndex] = {
-        ...result[existingIndex],
+    let existingIndex = -1;
+    if (item.id && map.has(item.id)) {
+      existingIndex = map.get(item.id)!;
+    } else if (item.clientMessageId && map.has(item.clientMessageId)) {
+      existingIndex = map.get(item.clientMessageId)!;
+    }
+
+    if (existingIndex !== -1 && existingIndex < result.length) {
+      const existing = result[existingIndex];
+      const merged: ChatMessage = {
+        ...existing,
         ...item,
         status:
-          item.status === "seen" || result[existingIndex].status === "seen"
+          item.status === "seen" || existing.status === "seen"
             ? "seen"
-            : item.status === "delivered" || result[existingIndex].status === "delivered"
+            : item.status === "delivered" || existing.status === "delivered"
             ? "delivered"
-            : item.status || result[existingIndex].status,
-        reactions: { ...result[existingIndex].reactions, ...item.reactions },
+            : item.status || existing.status,
+        reactions: { ...existing.reactions, ...item.reactions },
       };
+      result[existingIndex] = merged;
+      if (merged.id) map.set(merged.id, existingIndex);
+      if (merged.clientMessageId) map.set(merged.clientMessageId, existingIndex);
     } else {
+      const newIdx = result.length;
       result.push(item);
+      if (item.id) map.set(item.id, newIdx);
+      if (item.clientMessageId) map.set(item.clientMessageId, newIdx);
     }
   }
 
