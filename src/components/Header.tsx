@@ -26,7 +26,7 @@ export function Header({
   onToggleSound,
 }: HeaderProps) {
   return (
-    <header className="px-3 sm:px-5 py-2.5 border-b border-[var(--border)] bg-[var(--bg-dark)] flex items-center justify-between shrink-0 z-10">
+    <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-[var(--border)] bg-[var(--bg-dark)] flex items-center justify-between shrink-0 z-10">
       <div className="flex items-center gap-2.5 min-w-0">
         <button
           onClick={onOpenSidebar}

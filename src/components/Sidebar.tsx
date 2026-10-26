@@ -58,12 +58,12 @@ export function Sidebar({
 
       {/* Sidebar Drawer */}
       <aside
-        className={`fixed lg:static top-0 bottom-0 left-0 w-[290px] bg-[var(--bg-dark)] border-r border-[var(--border)] flex flex-col z-50 transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:static top-0 bottom-0 left-0 w-72 xl:w-80 shrink-0 h-full bg-[var(--bg-dark)] border-r border-[var(--border)] flex flex-col z-30 transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+        <div className="h-16 px-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-[var(--accent-dim)] border border-[var(--accent)] flex items-center justify-center text-xl shadow-sm">
               💖
@@ -86,7 +86,7 @@ export function Sidebar({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-2.5">
           {/* Days Together */}
           <div
             onClick={onOpenAnniversary}

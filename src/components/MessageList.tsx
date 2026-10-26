@@ -112,8 +112,8 @@ export const MessageList = React.memo(function MessageList({
   let lastDateLabel = "";
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 md:px-8 py-3 sm:py-5 flex flex-col bg-transparent">
-      <div className="max-w-3xl mx-auto w-full flex flex-col">
+    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col bg-transparent">
+      <div className="max-w-3xl xl:max-w-4xl mx-auto w-full flex flex-col flex-1">
         {/* Subtle Welcome Header */}
         {validMessages.length > 0 ? (
           <div className="text-center text-[11px] text-[var(--text-sub)] py-1.5 px-3 rounded-full bg-[var(--bg-card)]/80 border border-[var(--border)] max-w-xs mx-auto shadow-sm mb-3">
@@ -198,9 +198,9 @@ export const MessageList = React.memo(function MessageList({
               )}
 
               <div
-                className={`flex items-end gap-2 max-w-[85%] sm:max-w-[72%] md:max-w-[65%] ${
+                className={`flex items-end gap-2.5 max-w-[85%] sm:max-w-[75%] lg:max-w-[70%] ${
                   isMine ? "self-end flex-row-reverse" : "self-start"
-                } ${isFirstInGroup ? "mt-2.5" : "mt-1"}`}
+                } ${isFirstInGroup ? "mt-3" : "mt-1"}`}
               >
                 {/* Avatar for incoming messages: only show on the last message in a group */}
                 {!isMine && (

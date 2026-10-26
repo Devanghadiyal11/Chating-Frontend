@@ -245,176 +245,181 @@ export function ChatInput({
   };
 
   return (
-    <div className="p-2 sm:p-3 bg-[var(--bg-dark)] border-t border-[var(--border)] shrink-0 z-10">
-      {/* Audio Recording Live Panel */}
-      {isRecording && (
-        <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] mb-2 animate-pulse">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-            <span className="text-xs font-bold text-white">Recording Voice Note...</span>
-            <span className="text-xs text-[var(--accent)] font-mono font-bold">
-              {Math.floor(recordDuration / 60)}:{(recordDuration % 60).toString().padStart(2, "0")}
-            </span>
+    <div className="px-4 sm:px-6 lg:px-8 py-3 bg-[var(--bg-dark)] border-t border-[var(--border)] shrink-0 z-10">
+      <div className="max-w-3xl xl:max-w-4xl mx-auto w-full flex flex-col gap-2">
+        {/* Audio Recording Live Panel */}
+        {isRecording && (
+          <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+              <span className="text-xs font-bold text-white">Recording Voice Note...</span>
+              <span className="text-xs text-[var(--accent)] font-mono font-bold">
+                {Math.floor(recordDuration / 60)}:{(recordDuration % 60).toString().padStart(2, "0")}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelRecording}
+                className="px-2.5 py-1 text-xs text-white/70 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendRecording}
+                className="px-3 py-1 bg-[var(--accent)] text-white text-xs font-bold rounded-lg shadow-sm"
+              >
+                Send 🎙️
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+        )}
+
+        {/* Staged Photo Preview */}
+        {stagedPhoto && (
+          <div className="relative inline-block self-start rounded-xl overflow-hidden border border-[var(--accent)] shadow-md">
+            <img src={stagedPhoto} alt="Captured" className="w-20 h-20 object-cover" />
             <button
-              onClick={cancelRecording}
-              className="px-2.5 py-1 text-xs text-white/70 hover:text-white"
+              onClick={() => setStagedPhoto(null)}
+              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[10px] flex items-center justify-center font-bold"
             >
-              Cancel
+              ✕
             </button>
+          </div>
+        )}
+
+        {/* Replying Banner */}
+        {replyTarget && (
+          <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[var(--accent)] font-bold shrink-0">Replying to {replyTarget.sender}:</span>
+              <span className="truncate text-[var(--text-sub)]">
+                {replyTarget.content || (replyTarget.type === "image" ? "📷 Photo" : replyTarget.type === "audio" ? "🎙️ Voice Note" : "Message")}
+              </span>
+            </div>
             <button
-              onClick={sendRecording}
-              className="px-3 py-1 bg-[var(--accent)] text-white text-xs font-bold rounded-lg shadow-sm"
+              onClick={onCancelReply}
+              className="text-white/60 hover:text-white text-xs font-bold pl-2 shrink-0"
+              title="Cancel reply"
             >
-              Send 🎙️
+              ✕
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Staged Photo Preview */}
-      {stagedPhoto && (
-        <div className="relative inline-block mb-2 rounded-xl overflow-hidden border border-[var(--accent)] shadow-md">
-          <img src={stagedPhoto} alt="Captured" className="w-20 h-20 object-cover" />
-          <button
-            onClick={() => setStagedPhoto(null)}
-            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[10px] flex items-center justify-center font-bold"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+        {/* Composer Row - Grouped Input Capsule with Tools */}
+        <div className="w-full flex items-center gap-2">
+          {/* Unified Capsule: Media buttons + Text Input + Heart Nudge */}
+          <div className="flex-1 flex items-center bg-[var(--bg-card)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/50 rounded-2xl px-2 py-1 transition-all">
+            {/* Integrated Media Tools */}
+            <div className="flex items-center gap-0.5 shrink-0 text-white/70">
+              {/* Camera / Gallery Button with Popover */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPhotoMenuOpen((prev) => !prev)}
+                  className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95 text-white/70"
+                  title="Send Photo (Camera or Gallery)"
+                >
+                  📷
+                </button>
 
-      {/* Replying Banner */}
-      {replyTarget && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-card)] rounded-xl border border-[var(--border)] mb-2 text-xs">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[var(--accent)] font-bold shrink-0">Replying to {replyTarget.sender}:</span>
-            <span className="truncate text-[var(--text-sub)]">
-              {replyTarget.content || (replyTarget.type === "image" ? "📷 Photo" : replyTarget.type === "audio" ? "🎙️ Voice Note" : "Message")}
-            </span>
-          </div>
-          <button
-            onClick={onCancelReply}
-            className="text-white/60 hover:text-white text-xs font-bold pl-2 shrink-0"
-            title="Cancel reply"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+                {/* Hidden Gallery Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
 
-      {/* Composer Row - Grouped Input Capsule with Tools */}
-      <div className="max-w-3xl mx-auto w-full flex items-center gap-2">
-        {/* Unified Capsule: Media buttons + Text Input + Heart Nudge */}
-        <div className="flex-1 flex items-center bg-[var(--bg-card)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:ring-1 focus-within:ring-[var(--accent)]/50 rounded-2xl px-2 py-1 transition-all">
-          {/* Integrated Media Tools */}
-          <div className="flex items-center gap-0.5 shrink-0 text-white/70">
-            {/* Camera / Gallery Button with Popover */}
-            <div className="relative">
+                {/* Action Popover: Camera or Gallery */}
+                {photoMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setPhotoMenuOpen(false)}
+                    />
+                    <div className="absolute bottom-full left-0 mb-2 w-52 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-1.5 z-30 flex flex-col gap-1 backdrop-blur-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoMenuOpen(false);
+                          startCamera(facingMode);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
+                      >
+                        <span className="text-base">📸</span>
+                        <span>Take Live Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
+                      >
+                        <span className="text-base">🖼️</span>
+                        <span>Upload from Gallery</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <button
                 type="button"
-                onClick={() => setPhotoMenuOpen((prev) => !prev)}
-                className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95 text-white/70"
-                title="Send Photo (Camera or Gallery)"
+                onClick={startRecording}
+                disabled={isRecording}
+                className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
+                title="Record Voice Note"
               >
-                📷
+                🎙️
               </button>
-
-              {/* Hidden Gallery Input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-
-              {/* Action Popover: Camera or Gallery */}
-              {photoMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-20"
-                    onClick={() => setPhotoMenuOpen(false)}
-                  />
-                  <div className="absolute bottom-full left-0 mb-2 w-52 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl p-1.5 z-30 flex flex-col gap-1 backdrop-blur-md">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPhotoMenuOpen(false);
-                        startCamera(facingMode);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
-                    >
-                      <span className="text-base">📸</span>
-                      <span>Take Live Photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPhotoMenuOpen(false);
-                        fileInputRef.current?.click();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 rounded-xl transition-colors text-left"
-                    >
-                      <span className="text-base">🖼️</span>
-                      <span>Upload from Gallery</span>
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
 
+            {/* Text Input Box */}
+            <input
+              type="text"
+              value={text}
+              onChange={handleTextChange}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Write something sweet..."
+              className="flex-1 bg-transparent px-2.5 py-1.5 text-sm sm:text-base text-[var(--text-main)] placeholder-[var(--text-sub)]/50 focus:outline-none"
+            />
+
+            {/* Integrated Thinking of You / Heart Nudge */}
             <button
               type="button"
-              onClick={startRecording}
-              disabled={isRecording}
-              className="w-8 h-8 rounded-xl hover:bg-white/10 hover:text-white flex items-center justify-center text-base transition-colors active:scale-95"
-              title="Record Voice Note"
+              onClick={onSendNudge}
+              disabled={nudgeCooldown > 0}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-transform shrink-0 active:scale-90 ${
+                nudgeCooldown > 0
+                  ? "text-[var(--accent)] font-bold text-xs cursor-not-allowed opacity-60"
+                  : "hover:bg-[var(--accent-dim)] text-[var(--accent)] hover:scale-110"
+              }`}
+              title="Thinking of You! 💖"
             >
-              🎙️
+              {nudgeCooldown > 0 ? `${nudgeCooldown}s` : "💖"}
             </button>
           </div>
 
-          {/* Text Input Box */}
-          <input
-            type="text"
-            value={text}
-            onChange={handleTextChange}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSend();
-            }}
-            placeholder="Write something sweet..."
-            className="flex-1 bg-transparent px-2.5 py-1.5 text-sm sm:text-base text-[var(--text-main)] placeholder-[var(--text-sub)]/50 focus:outline-none"
-          />
-
-          {/* Integrated Thinking of You / Heart Nudge */}
+          {/* Compact Accent Send Button */}
           <button
             type="button"
-            onClick={onSendNudge}
-            disabled={nudgeCooldown > 0}
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-transform shrink-0 active:scale-90 ${
-              nudgeCooldown > 0
-                ? "text-[var(--accent)] font-bold text-xs cursor-not-allowed opacity-60"
-                : "hover:bg-[var(--accent-dim)] text-[var(--accent)] hover:scale-110"
-            }`}
-            title="Thinking of You! 💖"
+            onClick={handleSend}
+            disabled={!text.trim() && !stagedPhoto}
+            className="h-10 px-4 rounded-xl bg-[var(--accent)] hover:opacity-95 text-white text-xs sm:text-sm font-extrabold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Send message"
           >
-            {nudgeCooldown > 0 ? `${nudgeCooldown}s` : "💖"}
+            <span>Send</span>
           </button>
         </div>
-
-        {/* Compact Accent Send Button */}
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!text.trim() && !stagedPhoto}
-          className="h-10 px-4 rounded-xl bg-[var(--accent)] hover:opacity-95 text-white text-xs sm:text-sm font-extrabold flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-          title="Send message"
-        >
-          <span>Send</span>
-        </button>
       </div>
 
       {/* Live Camera Modal */}
