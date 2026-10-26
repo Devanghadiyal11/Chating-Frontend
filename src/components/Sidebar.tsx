@@ -58,7 +58,7 @@ export function Sidebar({
 
       {/* Sidebar Drawer */}
       <aside
-        className={`fixed lg:static top-0 bottom-0 left-0 w-72 xl:w-80 shrink-0 h-full bg-[var(--bg-dark)] border-r border-[var(--border)] flex flex-col z-30 transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:static top-0 bottom-0 left-0 w-72 xl:w-80 shrink-0 h-full bg-[var(--bg-dark)] border-r border-[var(--border)] flex flex-col z-50 lg:z-auto transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >

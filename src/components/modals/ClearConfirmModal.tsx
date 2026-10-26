@@ -16,7 +16,7 @@ export function ClearConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in">
       <div
         className="w-full max-w-sm bg-[var(--bg-card)] border border-red-500/40 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-center"
         onClick={(e) => e.stopPropagation()}

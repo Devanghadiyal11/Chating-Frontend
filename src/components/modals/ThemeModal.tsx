@@ -52,7 +52,7 @@ export function ThemeModal({ isOpen, onClose, currentTheme, onSelectTheme }: The
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-md bg-[var(--bg-card)] border border-[var(--border)] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-6 duration-200">
         <div className="p-5 bg-[var(--mine-bg)] text-white text-center">
           <div className="text-3xl mb-1">🎨</div>
