@@ -41,16 +41,13 @@ export function Header({
           <button
             type="button"
             onClick={onEditCoupleName}
-            className="flex items-center gap-1.5 text-left active:scale-95 transition-transform cursor-pointer group"
+            className="flex items-center gap-1.5 text-left active:scale-95 transition-transform cursor-pointer"
             title="Click to edit couple name 💕"
           >
             <span className="text-sm sm:text-base font-extrabold text-white truncate max-w-[180px] sm:max-w-xs md:max-w-md">
               {coupleName}
             </span>
             <span className="text-xs sm:text-sm">💕</span>
-            <span className="text-xs text-[var(--accent)] opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all">
-              ✏️
-            </span>
           </button>
 
           {/* One Clear Connection Indicator */}

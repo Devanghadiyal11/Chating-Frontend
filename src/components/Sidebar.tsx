@@ -73,9 +73,8 @@ export function Sidebar({
               💖
             </div>
             <div>
-              <div className="font-extrabold text-white text-sm truncate max-w-[170px] flex items-center gap-1">
-                <span className="truncate">{coupleName}</span>
-                <span className="text-[10px] text-[var(--accent)] opacity-80 group-hover:opacity-100">✏️</span>
+              <div className="font-extrabold text-white text-sm truncate max-w-[170px]">
+                {coupleName}
               </div>
               <div className="text-[11px] text-[var(--accent)] font-semibold">
                 Private Couple Space 💕
