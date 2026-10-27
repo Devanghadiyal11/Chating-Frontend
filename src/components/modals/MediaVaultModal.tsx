@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ChatMessage } from "@/lib/types";
+import { API_BASE } from "@/lib/config";
+import { decryptPhoto } from "@/lib/crypto";
 
 interface MediaVaultModalProps {
   isOpen: boolean;
@@ -43,17 +45,57 @@ export function MediaVaultModal({
   onOpenPhoto,
 }: MediaVaultModalProps) {
   const [filter, setFilter] = useState<"all" | "her" | "him">("all");
+  const [dbImages, setDbImages] = useState<any[]>([]);
+
+  // Fetch preserved photos from MongoDB Atlas 'images' collection (survives clear-chat)
+  useEffect(() => {
+    if (!isOpen) return;
+    let isCancelled = false;
+
+    fetch(`${API_BASE}/api/images?include_cleared=true`)
+      .then((res) => res.json())
+      .then(async (data) => {
+        if (isCancelled || !data || !Array.isArray(data.images)) return;
+        const decryptedList = await Promise.all(
+          data.images.map(async (item: any) => {
+            let src = item.image;
+            if (src && typeof src === "string" && src.startsWith("enc:v1:")) {
+              src = await decryptPhoto(src);
+            }
+            return { ...item, image: src };
+          })
+        );
+        if (!isCancelled) {
+          setDbImages(decryptedList);
+        }
+      })
+      .catch((err) => {
+        console.warn("[Vault] Could not fetch archived images:", err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen]);
 
   // Extract, decrypt/filter, and chronologically group all photos
   const vaultItems = useMemo(() => {
     const items: VaultItem[] = [];
+    const seenIds = new Set<string>();
 
-    messages.forEach((msg) => {
-      if (!msg.image || typeof msg.image !== "string" || !msg.image.trim()) return;
+    const processItem = (
+      id: string,
+      src: string,
+      sender: string,
+      datetime?: string,
+      time_ms?: number
+    ) => {
+      if (!src || typeof src !== "string" || !src.trim() || seenIds.has(id)) return;
+      seenIds.add(id);
 
       const timeMs =
-        (msg.datetime ? Date.parse(msg.datetime) : 0) ||
-        Number(msg.time_ms) ||
+        (datetime ? Date.parse(datetime) : 0) ||
+        Number(time_ms) ||
         Date.now();
       const d = new Date(timeMs);
 
@@ -75,19 +117,33 @@ export function MediaVaultModal({
       });
 
       items.push({
-        id: msg.id,
-        src: msg.image,
-        sender: msg.sender,
+        id,
+        src,
+        sender,
         timeMs,
         formattedTime,
         monthYear,
         dateLabel,
       });
+    };
+
+    // Live chat messages
+    messages.forEach((msg) => {
+      if (msg.image) {
+        processItem(msg.id, msg.image, msg.sender, msg.datetime, msg.time_ms);
+      }
+    });
+
+    // MongoDB preserved images collection (includes soft-deleted photos)
+    dbImages.forEach((img) => {
+      if (img.image) {
+        processItem(img.id, img.image, img.sender, img.datetime, img.time_ms);
+      }
     });
 
     // Newest first
     return items.sort((a, b) => b.timeMs - a.timeMs);
-  }, [messages]);
+  }, [messages, dbImages]);
 
   // Filter items
   const filteredItems = useMemo(() => {
