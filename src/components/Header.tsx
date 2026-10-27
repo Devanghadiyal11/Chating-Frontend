@@ -9,10 +9,12 @@ interface HeaderProps {
   connectionStatus?: "connected" | "reconnecting" | "offline";
   pendingCount?: number;
   partnerName?: string | null;
+  photoCount?: number;
   onOpenSidebar: () => void;
   onEditCoupleName?: () => void;
   onSendNudge: () => void;
   onToggleSound: () => void;
+  onOpenVault?: () => void;
 }
 
 export function Header({
@@ -22,10 +24,12 @@ export function Header({
   connectionStatus = "connected",
   pendingCount = 0,
   partnerName = null,
+  photoCount = 0,
   onOpenSidebar,
   onEditCoupleName,
   onSendNudge,
   onToggleSound,
+  onOpenVault,
 }: HeaderProps) {
   return (
     <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-[var(--border)] bg-[var(--bg-dark)] flex items-center justify-between shrink-0 z-10">
@@ -82,8 +86,22 @@ export function Header({
         </div>
       </div>
 
-      {/* Compact Love Nudge & Notification Sound Buttons */}
+      {/* Action Buttons: Memories Vault, Love Nudge & Notification Sound */}
       <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={onOpenVault}
+          className="relative px-2.5 h-8 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] text-xs flex items-center gap-1 font-bold active:scale-92 transition-transform hover:border-[var(--accent)] text-white/90"
+          title="Memories & Media Vault 💕"
+        >
+          <span>📸</span>
+          <span className="hidden sm:inline text-[11px]">Vault</span>
+          {photoCount > 0 && (
+            <span className="text-[10px] bg-[var(--accent-dim)] text-[var(--accent)] px-1.5 py-0.2 rounded-full font-extrabold">
+              {photoCount}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={onSendNudge}
           disabled={nudgeCooldown > 0}

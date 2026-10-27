@@ -14,6 +14,99 @@ interface MessageListProps {
   onReplyMessage?: (msg: ChatMessage) => void;
 }
 
+interface SwipeableBubbleProps {
+  children: React.ReactNode;
+  onReply?: () => void;
+  className?: string;
+  onClick?: () => void;
+}
+
+function SwipeableBubble({ children, onReply, className, onClick }: SwipeableBubbleProps) {
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const isHorizontalRef = useRef<boolean | null>(null);
+  const hasVibratedRef = useRef(false);
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    isHorizontalRef.current = null;
+    hasVibratedRef.current = false;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!startRef.current) return;
+    const diffX = e.touches[0].clientX - startRef.current.x;
+    const diffY = e.touches[0].clientY - startRef.current.y;
+
+    if (isHorizontalRef.current === null) {
+      if (Math.abs(diffX) > 8 && Math.abs(diffX) > Math.abs(diffY)) {
+        isHorizontalRef.current = diffX > 0;
+      } else if (Math.abs(diffY) > 8) {
+        isHorizontalRef.current = false;
+      }
+    }
+
+    if (isHorizontalRef.current && diffX > 0) {
+      const clamped = Math.min(diffX * 0.45, 65);
+      setSwipeOffset(clamped);
+
+      if (clamped >= 38 && !hasVibratedRef.current) {
+        hasVibratedRef.current = true;
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(15);
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (swipeOffset >= 38 && onReply) {
+      onReply();
+    }
+    setSwipeOffset(0);
+    startRef.current = null;
+    isHorizontalRef.current = null;
+    hasVibratedRef.current = false;
+  };
+
+  return (
+    <div className="relative">
+      {/* Animated Swipe-to-Reply Icon on the Left */}
+      {swipeOffset > 4 && (
+        <div
+          className="absolute left-[-32px] top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[var(--accent)] text-white text-[11px] flex items-center justify-center shadow-lg transition-transform pointer-events-none z-10"
+          style={{
+            transform: `translateY(-50%) scale(${Math.min(swipeOffset / 35, 1)})`,
+            opacity: Math.min(swipeOffset / 25, 1),
+          }}
+        >
+          ↩️
+        </div>
+      )}
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        onClick={onClick}
+        className={className}
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: isDragging ? "none" : "transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28)",
+          touchAction: "pan-y",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export const MessageList = React.memo(function MessageList({
   messages,
   currentUser,
@@ -242,8 +335,9 @@ export const MessageList = React.memo(function MessageList({
                     </div>
                   )}
 
-                  {/* Content Bubble */}
-                  <div
+                  {/* Content Bubble with Native Swipe-to-Reply */}
+                  <SwipeableBubble
+                    onReply={() => onReplyMessage?.(msg)}
                     onClick={() => handleBubbleClick(msg.id)}
                     className={`relative group px-3.5 py-2 shadow-sm text-sm sm:text-[15px] leading-relaxed break-words select-text ${bubbleCorners} ${
                       isMine
@@ -389,7 +483,7 @@ export const MessageList = React.memo(function MessageList({
                         🗑️
                       </button>
                     </div>
-                  </div>
+                  </SwipeableBubble>
 
                   {/* Reactions Pill Display */}
                   {msg.reactions && Object.keys(msg.reactions).length > 0 && (
