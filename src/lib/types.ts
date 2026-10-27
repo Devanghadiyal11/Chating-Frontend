@@ -16,6 +16,8 @@ export interface ChatMessage {
   type: "chat" | "image" | "audio" | "system";
   timestamp: string;
   time_ms: number;
+  datetime?: string;
+  created_at?: string | number;
   status?: DeliveryStatus;
   reactions?: Record<string, string[]>;
 }
@@ -31,6 +33,8 @@ export interface PendingMessage {
   type: "chat" | "image" | "audio";
   time_ms: number;
   timestamp: string;
+  datetime?: string;
+  created_at?: string | number;
 }
 
 export interface CoupleSettings {

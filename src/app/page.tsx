@@ -37,6 +37,27 @@ function isSameMessage(a: ChatMessage, b: ChatMessage): boolean {
   return false;
 }
 
+// Helper: Extract absolute calendar datetime in milliseconds
+function getMessageDatetimeMs(m: ChatMessage): number {
+  if (m.datetime) {
+    const parsed = Date.parse(m.datetime);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (typeof m.created_at === "string") {
+    const parsed = Date.parse(m.created_at);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  } else if (typeof m.created_at === "number" && m.created_at > 0) {
+    return m.created_at;
+  }
+  if (m.time_ms && Number(m.time_ms) > 0) {
+    return Number(m.time_ms);
+  }
+  if (m.seq && Number(m.seq) > 0) {
+    return Number(m.seq);
+  }
+  return 0;
+}
+
 // Helper: Merge and deduplicate messages seamlessly without ghost duplicates or empty bubbles
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const validIncoming = incoming.filter(
@@ -71,6 +92,9 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
           existing.image && !existing.image.startsWith("enc:v1:") && (!item.image || item.image.startsWith("enc:v1:"))
             ? existing.image
             : item.image || existing.image,
+        // Preserve existing datetime if incoming lacks it
+        datetime: item.datetime || existing.datetime,
+        created_at: item.created_at || existing.created_at,
         status:
           item.status === "seen" || existing.status === "seen"
             ? "seen"
@@ -90,14 +114,14 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
     }
   }
 
-  // Consistent, transitive chronological sort
+  // Consistent, transitive chronological sort by full calendar datetime -> sequence -> ID
   return result
     .filter((m) => Boolean(m.content?.trim() || m.image || m.audio))
     .sort((a, b) => {
-      const aTime = Number(a.time_ms) || (a.seq ? Number(a.seq) : 0);
-      const bTime = Number(b.time_ms) || (b.seq ? Number(b.seq) : 0);
-      if (aTime !== bTime) {
-        return aTime - bTime;
+      const aDt = getMessageDatetimeMs(a);
+      const bDt = getMessageDatetimeMs(b);
+      if (aDt !== bDt) {
+        return aDt - bDt;
       }
       const aSeq = Number(a.seq) || 0;
       const bSeq = Number(b.seq) || 0;
@@ -764,6 +788,7 @@ export default function ChatPage() {
 
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
+    const nowIso = new Date().toISOString();
     const replyDoc = replyTarget
       ? {
           id: replyTarget.id,
@@ -784,6 +809,8 @@ export default function ChatPage() {
       type: stagedPhoto ? "image" : "chat",
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       time_ms: nowMs,
+      datetime: nowIso,
+      created_at: nowIso,
       seq: nowMs,
       reply_to: replyDoc,
       status: "pending",
@@ -836,6 +863,7 @@ export default function ChatPage() {
 
     const clientMessageId = "m_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
     const nowMs = Date.now();
+    const nowIso = new Date().toISOString();
     const replyDoc = replyTarget
       ? {
           id: replyTarget.id,
@@ -855,6 +883,8 @@ export default function ChatPage() {
       type: "audio",
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       time_ms: nowMs,
+      datetime: nowIso,
+      created_at: nowIso,
       seq: nowMs,
       reply_to: replyDoc,
       status: "pending",

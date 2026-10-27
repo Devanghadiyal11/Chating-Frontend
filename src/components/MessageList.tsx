@@ -146,7 +146,7 @@ export const MessageList = React.memo(function MessageList({
 
         {validMessages.map((msg, idx) => {
           const hasText = Boolean(msg.content && msg.content.trim().length > 0);
-          const timeMs = Number(msg.time_ms) || Date.now();
+          const timeMs = (msg.datetime ? Date.parse(msg.datetime) : 0) || Number(msg.time_ms) || Date.now();
           const dateLabel = formatDateLabel(timeMs);
           const showDivider = dateLabel !== lastDateLabel;
           if (showDivider) lastDateLabel = dateLabel;
@@ -156,11 +156,11 @@ export const MessageList = React.memo(function MessageList({
           const prevMsg = idx > 0 ? validMessages[idx - 1] : null;
           const nextMsg = idx < validMessages.length - 1 ? validMessages[idx + 1] : null;
 
-          const prevTime = prevMsg ? Number(prevMsg.time_ms) || 0 : 0;
-          const nextTime = nextMsg ? Number(nextMsg.time_ms) || 0 : 0;
+          const prevTime = prevMsg ? ((prevMsg.datetime ? Date.parse(prevMsg.datetime) : 0) || Number(prevMsg.time_ms) || 0) : 0;
+          const nextTime = nextMsg ? ((nextMsg.datetime ? Date.parse(nextMsg.datetime) : 0) || Number(nextMsg.time_ms) || 0) : 0;
 
           // Check if next message would trigger a date divider
-          const nextDateLabel = nextMsg ? formatDateLabel(Number(nextMsg.time_ms) || 0) : null;
+          const nextDateLabel = nextMsg ? formatDateLabel(nextTime) : null;
           const nextHasDivider = nextDateLabel !== dateLabel;
 
           const sameSenderAsPrev = Boolean(
