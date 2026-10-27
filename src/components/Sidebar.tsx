@@ -14,12 +14,10 @@ interface SidebarProps {
   currentTheme: ThemeType;
   disappearingMode: number;
   photoCount?: number;
-  isPushEnabled?: boolean;
   onSelectTheme: (theme: ThemeType) => void;
   onChangeDisappearing: (seconds: number) => void;
   onOpenAnniversary: () => void;
   onOpenVault?: () => void;
-  onTogglePush?: () => void;
   onClearChat: () => void;
   onLogout: () => void;
 }
@@ -35,12 +33,10 @@ export function Sidebar({
   currentTheme,
   disappearingMode,
   photoCount = 0,
-  isPushEnabled = false,
   onSelectTheme,
   onChangeDisappearing,
   onOpenAnniversary,
   onOpenVault,
-  onTogglePush,
   onClearChat,
   onLogout,
 }: SidebarProps) {
@@ -254,31 +250,6 @@ export function Sidebar({
             </div>
             <span className="text-xs text-[var(--text-sub)] group-hover:translate-x-0.5 transition-transform">→</span>
           </button>
-
-          {/* Web Push Notifications */}
-          <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[var(--bg-root)] border border-[var(--border)] flex items-center justify-center text-sm">
-                🔔
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white">Push Notifications</div>
-                <div className="text-[10px] text-[var(--text-sub)]">
-                  {isPushEnabled ? "Active when tab closed" : "Receive alerts on phone"}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={onTogglePush}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                isPushEnabled
-                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                  : "bg-[var(--accent)] text-white shadow-sm hover:opacity-90"
-              }`}
-            >
-              {isPushEnabled ? "✓ Active" : "Enable"}
-            </button>
-          </div>
 
           {/* Copy Direct Link */}
           <button

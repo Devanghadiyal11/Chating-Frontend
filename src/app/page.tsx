@@ -28,11 +28,6 @@ import { AnniversaryModal } from "@/components/modals/AnniversaryModal";
 import { LoginModal } from "@/components/modals/LoginModal";
 import { ClearConfirmModal } from "@/components/modals/ClearConfirmModal";
 import { MediaVaultModal } from "@/components/modals/MediaVaultModal";
-import {
-  registerServiceWorker,
-  getPushPermissionState,
-  subscribeToPushNotifications,
-} from "@/lib/pushNotifications";
 
 // Helper: Determine if two message representations refer to the exact same message
 function isSameMessage(a: ChatMessage, b: ChatMessage): boolean {
@@ -170,9 +165,6 @@ export default function ChatPage() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
 
-  // Push Notifications state
-  const [isPushEnabled, setIsPushEnabled] = useState(false);
-
   // Connection & Offline Queue
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [pendingCount, setPendingCount] = useState(0);
@@ -242,21 +234,11 @@ export default function ChatPage() {
 
     applyThemeStyle(savedTheme);
 
-    registerServiceWorker().then(() => {
-      if (getPushPermissionState() === "granted") {
-        setIsPushEnabled(true);
-      }
-    });
-
     if (savedUser && savedToken) {
       setCurrentUser(savedUser);
       setSessionToken(savedToken);
       setCurrentAvatar(savedAv);
       setIsLoggedIn(true);
-
-      if (getPushPermissionState() === "granted") {
-        subscribeToPushNotifications(API_BASE, savedUser).catch(() => {});
-      }
     }
 
     const onOnline = () => setConnectionStatus("reconnecting");
@@ -1063,22 +1045,6 @@ export default function ChatPage() {
     return messages.filter((m) => Boolean(m.image && m.image.trim())).length;
   }, [messages]);
 
-  // Push Notifications Toggle Handler
-  const handleTogglePush = async () => {
-    if (!isLoggedIn || !currentUser) {
-      alert("Please log in first to enable push notifications 💕");
-      return;
-    }
-    const res = await subscribeToPushNotifications(API_BASE, currentUser);
-    if (res.success) {
-      setIsPushEnabled(true);
-      burstHearts(15);
-      alert(res.message);
-    } else {
-      alert(res.message);
-    }
-  };
-
   if (!mounted) {
     return (
       <div className="flex w-full h-[100dvh] items-center justify-center bg-[#0c0a10] text-[#e11d48]">
@@ -1104,12 +1070,10 @@ export default function ChatPage() {
         currentTheme={currentTheme}
         disappearingMode={disappearingMode}
         photoCount={photoCount}
-        isPushEnabled={isPushEnabled}
         onSelectTheme={handleSelectTheme}
         onChangeDisappearing={handleChangeDisappearing}
         onOpenAnniversary={() => setAnniversaryModalOpen(true)}
         onOpenVault={() => setVaultOpen(true)}
-        onTogglePush={handleTogglePush}
         onClearChat={handleClearChat}
         onLogout={handleLogout}
       />
