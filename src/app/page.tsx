@@ -66,6 +66,11 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
       const merged: ChatMessage = {
         ...existing,
         ...item,
+        // Preserve decrypted photo if incoming item has encrypted or missing photo
+        image:
+          existing.image && !existing.image.startsWith("enc:v1:") && (!item.image || item.image.startsWith("enc:v1:"))
+            ? existing.image
+            : item.image || existing.image,
         status:
           item.status === "seen" || existing.status === "seen"
             ? "seen"
@@ -85,11 +90,21 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
     }
   }
 
+  // Consistent, transitive chronological sort
   return result
     .filter((m) => Boolean(m.content?.trim() || m.image || m.audio))
     .sort((a, b) => {
-      if (a.seq && b.seq && a.seq !== b.seq) return a.seq - b.seq;
-      return (Number(a.time_ms) || 0) - (Number(b.time_ms) || 0);
+      const aTime = Number(a.time_ms) || (a.seq ? Number(a.seq) : 0);
+      const bTime = Number(b.time_ms) || (b.seq ? Number(b.seq) : 0);
+      if (aTime !== bTime) {
+        return aTime - bTime;
+      }
+      const aSeq = Number(a.seq) || 0;
+      const bSeq = Number(b.seq) || 0;
+      if (aSeq !== bSeq) {
+        return aSeq - bSeq;
+      }
+      return (a.id || "").localeCompare(b.id || "");
     });
 }
 
@@ -145,7 +160,7 @@ export default function ChatPage() {
   currentThemeRef.current = currentTheme;
 
   const wsRef = useRef<WebSocket | null>(null);
-  const maxSeqRef = useRef<number>(0);
+  const maxEventSeqRef = useRef<number>(0);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const connectTimeRef = useRef<number>(0);
 
@@ -252,7 +267,7 @@ export default function ChatPage() {
     }
 
     if (event.seq) {
-      maxSeqRef.current = Math.max(maxSeqRef.current, event.seq);
+      maxEventSeqRef.current = Math.max(maxEventSeqRef.current, event.seq);
     }
 
     const { type, actorId, payload } = event;
@@ -266,7 +281,6 @@ export default function ChatPage() {
         const chatItem: ChatMessage = payload as ChatMessage;
         if (!chatItem?.id) break;
         if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) break;
-        if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
         const handleIncoming = (item: ChatMessage) => {
           setMessages((prev) => mergeMessages(prev, [item]));
@@ -352,7 +366,7 @@ export default function ChatPage() {
     const token = sessionTokenRef.current;
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE}/api/events?after_seq=${maxSeqRef.current}`, {
+      const res = await fetch(`${API_BASE}/api/events?after_seq=${maxEventSeqRef.current}`, {
         headers: getAuthHeaders(token),
       });
       if (res.ok) {
@@ -373,10 +387,7 @@ export default function ChatPage() {
     if (!user) return;
 
     try {
-      let url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
-      if (maxSeqRef.current > 0) {
-        url += `&after_seq=${maxSeqRef.current}`;
-      }
+      const url = `${API_BASE}/api/messages?username=${encodeURIComponent(user)}`;
       const res = await fetch(url, { headers: getAuthHeaders(token) });
       if (res.ok) {
         const data = await res.json();
@@ -386,7 +397,6 @@ export default function ChatPage() {
         if (incoming.length > 0) {
           incoming = await decryptMessages(incoming);
           incoming.forEach((m) => {
-            if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
             if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
               sendAck(m.id, "delivered");
             }
@@ -452,7 +462,6 @@ export default function ChatPage() {
         if (incoming.length > 0) {
           incoming = await decryptMessages(incoming);
           incoming.forEach((m) => {
-            if (m.seq) maxSeqRef.current = Math.max(maxSeqRef.current, m.seq);
             if (m.sender.toLowerCase() !== user.toLowerCase() && m.status !== "delivered" && m.status !== "seen") {
               sendAck(m.id, "delivered");
             }
@@ -619,7 +628,6 @@ export default function ChatPage() {
           const chatItem: ChatMessage = msg;
           if (chatItem.id) {
             if (!chatItem.content?.trim() && !chatItem.image && !chatItem.audio) return;
-            if (chatItem.seq) maxSeqRef.current = Math.max(maxSeqRef.current, chatItem.seq);
 
             const handleLegacyIncoming = (item: ChatMessage) => {
               setMessages((prev) => mergeMessages(prev, [item]));
