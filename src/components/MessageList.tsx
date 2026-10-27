@@ -14,91 +14,198 @@ interface MessageListProps {
   onReplyMessage?: (msg: ChatMessage) => void;
 }
 
+function WhatsAppReplyIcon({ active }: { active: boolean }) {
+  return (
+    <div
+      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all duration-200 shadow-md ${
+        active
+          ? "bg-[var(--accent)] text-white scale-110 shadow-lg ring-2 ring-[var(--accent)]/50"
+          : "bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-sub)] scale-90"
+      }`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="15"
+        height="15"
+        fill="currentColor"
+        className={`transition-transform duration-200 ${active ? "scale-110 rotate-[-10deg]" : ""}`}
+      >
+        <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z" />
+      </svg>
+    </div>
+  );
+}
+
 interface SwipeableBubbleProps {
   children: React.ReactNode;
   onReply?: () => void;
   className?: string;
   onClick?: () => void;
+  isMine: boolean;
 }
 
-function SwipeableBubble({ children, onReply, className, onClick }: SwipeableBubbleProps) {
+function SwipeableBubble({ children, onReply, className, onClick, isMine }: SwipeableBubbleProps) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
-  const isHorizontalRef = useRef<boolean | null>(null);
-  const hasVibratedRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
 
-  // Touch handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    startRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  const startXRef = useRef<number>(0);
+  const startYRef = useRef<number>(0);
+  const isHorizontalRef = useRef<boolean | null>(null);
+  const hasTriggeredRef = useRef(false);
+  const isPointerDownRef = useRef(false);
+  const pointerIdRef = useRef<number | null>(null);
+
+  const THRESHOLD = 38;
+  const MAX_PULL = 68;
+
+  const onStart = (clientX: number, clientY: number, pointerId?: number) => {
+    startXRef.current = clientX;
+    startYRef.current = clientY;
     isHorizontalRef.current = null;
-    hasVibratedRef.current = false;
-    setIsDragging(true);
+    hasTriggeredRef.current = false;
+    isPointerDownRef.current = true;
+    if (pointerId !== undefined) pointerIdRef.current = pointerId;
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!startRef.current) return;
-    const diffX = e.touches[0].clientX - startRef.current.x;
-    const diffY = e.touches[0].clientY - startRef.current.y;
+  const onMove = (clientX: number, clientY: number, e?: any) => {
+    if (!isPointerDownRef.current) return;
 
+    const diffX = clientX - startXRef.current;
+    const diffY = clientY - startYRef.current;
+
+    // Detect gesture direction
     if (isHorizontalRef.current === null) {
-      if (Math.abs(diffX) > 8 && Math.abs(diffX) > Math.abs(diffY)) {
-        isHorizontalRef.current = diffX > 0;
-      } else if (Math.abs(diffY) > 8) {
+      if (Math.abs(diffX) > 6 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (diffX > 0) {
+          isHorizontalRef.current = true;
+          setIsDragging(true);
+        } else {
+          isHorizontalRef.current = false;
+        }
+      } else if (Math.abs(diffY) > 6) {
         isHorizontalRef.current = false;
       }
     }
 
     if (isHorizontalRef.current && diffX > 0) {
-      const clamped = Math.min(diffX * 0.45, 65);
+      if (e && e.cancelable && typeof e.preventDefault === "function") {
+        e.preventDefault();
+      }
+
+      // Smooth resistance curve
+      const clamped = Math.min(diffX * 0.5, MAX_PULL);
       setSwipeOffset(clamped);
 
-      if (clamped >= 38 && !hasVibratedRef.current) {
-        hasVibratedRef.current = true;
+      const ready = clamped >= THRESHOLD;
+      setIsReady(ready);
+
+      if (ready && !hasTriggeredRef.current) {
+        hasTriggeredRef.current = true;
         if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate(15);
+          try {
+            navigator.vibrate(15);
+          } catch {}
         }
+      } else if (!ready && hasTriggeredRef.current) {
+        hasTriggeredRef.current = false;
       }
     }
   };
 
-  const handleTouchEnd = () => {
+  const onEnd = () => {
+    if (!isPointerDownRef.current) return;
+    isPointerDownRef.current = false;
     setIsDragging(false);
-    if (swipeOffset >= 38 && onReply) {
+
+    if (swipeOffset >= THRESHOLD && onReply) {
       onReply();
     }
+
     setSwipeOffset(0);
-    startRef.current = null;
+    setIsReady(false);
+    startXRef.current = 0;
+    startYRef.current = 0;
     isHorizontalRef.current = null;
-    hasVibratedRef.current = false;
+    hasTriggeredRef.current = false;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a")) return;
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+    onStart(e.clientX, e.clientY, e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    onMove(e.clientX, e.clientY, e);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+    onEnd();
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+    onEnd();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest("button, a")) return;
+    const t = e.touches[0];
+    onStart(t.clientX, t.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    onMove(t.clientX, t.clientY, e);
+  };
+
+  const handleTouchEnd = () => {
+    onEnd();
   };
 
   return (
-    <div className="relative">
-      {/* Animated Swipe-to-Reply Icon on the Left */}
-      {swipeOffset > 4 && (
-        <div
-          className="absolute left-[-32px] top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[var(--accent)] text-white text-[11px] flex items-center justify-center shadow-lg transition-transform pointer-events-none z-10"
-          style={{
-            transform: `translateY(-50%) scale(${Math.min(swipeOffset / 35, 1)})`,
-            opacity: Math.min(swipeOffset / 25, 1),
-          }}
-        >
-          ↩️
-        </div>
-      )}
+    <div className="relative select-none flex items-center">
+      {/* WhatsApp-Style Curved Reply Icon inside the swipe gap */}
+      <div
+        className="absolute left-1 pointer-events-none z-10 transition-transform duration-75 flex items-center justify-center"
+        style={{
+          opacity: swipeOffset > 4 ? Math.min(swipeOffset / 20, 1) : 0,
+          transform: `translateX(${Math.max((swipeOffset - 30) / 2, 2)}px) scale(${
+            swipeOffset > 4 ? Math.min(0.4 + (swipeOffset / THRESHOLD) * 0.7, 1.1) : 0
+          })`,
+        }}
+      >
+        <WhatsAppReplyIcon active={isReady} />
+      </div>
 
       <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-        onClick={onClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onClick={(e) => {
+          if (hasTriggeredRef.current || swipeOffset > 6) {
+            e.stopPropagation();
+            return;
+          }
+          onClick?.();
+        }}
         className={className}
         style={{
           transform: `translateX(${swipeOffset}px)`,
-          transition: isDragging ? "none" : "transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28)",
+          transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
           touchAction: "pan-y",
+          cursor: "grab",
         }}
       >
         {children}
@@ -339,6 +446,7 @@ export const MessageList = React.memo(function MessageList({
                   <SwipeableBubble
                     onReply={() => onReplyMessage?.(msg)}
                     onClick={() => handleBubbleClick(msg.id)}
+                    isMine={isMine}
                     className={`relative group px-3.5 py-2 shadow-sm text-sm sm:text-[15px] leading-relaxed break-words select-text ${bubbleCorners} ${
                       isMine
                         ? "bg-[var(--mine-bg)] text-white"

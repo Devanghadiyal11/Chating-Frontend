@@ -22,6 +22,14 @@ export function ChatInput({
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [stagedPhoto, setStagedPhoto] = useState<string | null>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus input when replying to a message
+  useEffect(() => {
+    if (replyTarget) {
+      textInputRef.current?.focus();
+    }
+  }, [replyTarget]);
 
   // Photo source popover & gallery upload
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
@@ -380,6 +388,7 @@ export function ChatInput({
 
             {/* Text Input Box */}
             <input
+              ref={textInputRef}
               type="text"
               value={text}
               onChange={handleTextChange}
