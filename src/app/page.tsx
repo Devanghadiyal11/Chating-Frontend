@@ -147,6 +147,7 @@ export default function ChatPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const maxSeqRef = useRef<number>(0);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
+  const connectTimeRef = useRef<number>(0);
 
   // Refresh pending items count from IndexedDB
   const refreshPendingCount = useCallback(async () => {
@@ -182,6 +183,7 @@ export default function ChatPage() {
   // Initial Load & Session Initialization
   useEffect(() => {
     setMounted(true);
+    connectTimeRef.current = Date.now();
     refreshPendingCount();
 
     const savedUser = localStorage.getItem("couple_user");
@@ -239,7 +241,7 @@ export default function ChatPage() {
   }, []);
 
   // Unified Event Processor (Deduplication + Strict Sequence Ordering)
-  const processEvent = useCallback((event: AppEvent) => {
+  const processEvent = useCallback((event: AppEvent, isCatchUp = false) => {
     if (!event) return;
 
     if (event.eventId && processedEventIdsRef.current.has(event.eventId)) {
@@ -254,6 +256,10 @@ export default function ChatPage() {
     }
 
     const { type, actorId, payload } = event;
+    const isLive =
+      !isCatchUp &&
+      (!event.createdAt ||
+        (Date.now() - event.createdAt < 10000 && event.createdAt >= connectTimeRef.current - 3000));
 
     switch (type) {
       case "message.created": {
@@ -267,7 +273,7 @@ export default function ChatPage() {
           if (item.clientMessageId) {
             removePendingMessage(item.clientMessageId).then(() => refreshPendingCount());
           }
-          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase() && isLive) {
             sendAck(item.id, "delivered");
             playMessageChime(soundEnabledRef.current);
           }
@@ -288,7 +294,7 @@ export default function ChatPage() {
           setMessages((prev) =>
             prev.map((m) => (m.id === payload.msg_id ? { ...m, reactions: payload.reactions } : m))
           );
-          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
+          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase() && isLive) {
             burstHearts(12);
           }
         }
@@ -296,17 +302,16 @@ export default function ChatPage() {
       }
 
       case "nudge.created": {
-        burstHearts(40);
-        playLoveNudgeChime(soundEnabledRef.current);
+        if (isLive) {
+          burstHearts(40);
+          playLoveNudgeChime(soundEnabledRef.current);
+        }
         break;
       }
 
       case "theme.updated": {
         if (payload?.theme && payload.theme !== currentThemeRef.current) {
           applyThemeStyle(payload.theme);
-          if (actorId.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-            burstHearts(20);
-          }
         }
         break;
       }
@@ -354,7 +359,7 @@ export default function ChatPage() {
         const data = await res.json();
         if (data.events && Array.isArray(data.events)) {
           for (const ev of data.events) {
-            processEvent(ev);
+            processEvent(ev, true);
           }
         }
       }
@@ -516,6 +521,7 @@ export default function ChatPage() {
 
       ws.onopen = () => {
         if (isCleanedUp) return;
+        connectTimeRef.current = Date.now();
         setConnectionStatus("connected");
         fetch(`${API_BASE}/api/purge_dummies`).catch(() => {});
         flushQueue();
@@ -538,7 +544,7 @@ export default function ChatPage() {
 
           // 1. Process Unified Event Envelope
           if (msg.type === "event" && msg.event) {
-            processEvent(msg.event);
+            processEvent(msg.event, false);
             return;
           }
 
@@ -574,9 +580,6 @@ export default function ChatPage() {
           if (msg.type === "theme_update") {
             if (msg.theme && msg.theme !== currentThemeRef.current) {
               applyThemeStyle(msg.theme);
-              if (msg.sender && msg.sender !== "system" && msg.sender.toLowerCase() !== currentUserRef.current.toLowerCase()) {
-                burstHearts(20);
-              }
             }
             return;
           }
